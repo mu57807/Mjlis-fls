@@ -2,7 +2,14 @@
    Majlis FLS — Supabase-backed app logic
    ============================================================ */
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseClient = null;
+let startupError = null;
+try {
+  if (!window.supabase) throw new Error("The app's core library didn't load.");
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  startupError = e;
+}
 
 /* ---------------- UI chrome strings (app strings, not content) ---------------- */
 const UI = {
@@ -1213,7 +1220,24 @@ function init() {
     }
   });
 
-  initAuth();
+  initAuth().catch((e) => showFatalBanner(e.message || "Please check your connection and reload the page."));
 }
 
-document.addEventListener("DOMContentLoaded", init);
+function showFatalBanner(detail) {
+  const banner = document.getElementById("fatalBanner");
+  if (!banner) return;
+  if (detail) document.getElementById("fatalBannerDetail").textContent = detail;
+  banner.hidden = false;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (startupError) {
+    showFatalBanner(startupError.message || "Please check your connection and reload the page.");
+    return;
+  }
+  try {
+    init();
+  } catch (e) {
+    showFatalBanner(e.message || "Please check your connection and reload the page.");
+  }
+});

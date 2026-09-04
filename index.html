@@ -10,6 +10,12 @@
 </head>
 <body>
 
+<!-- Shown only if the app fails to start (e.g. a required script didn't load) -->
+<div class="fatal-banner" id="fatalBanner" hidden>
+  <strong>Majlis FLS couldn't start.</strong>
+  <span id="fatalBannerDetail">Please check your connection and reload the page.</span>
+</div>
+
 <!-- Auth gate: covers the app until the user has a verified session + profile -->
 <div class="auth-gate" id="authGate">
   <div class="auth-card">
@@ -293,7 +299,7 @@
 
 <div class="toast" id="toast" hidden></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="vendor/supabase.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
 </body>
