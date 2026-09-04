@@ -213,6 +213,24 @@ let pendingVideoBlob = null;
 let pendingVideoDuration = 0;
 let pendingSignup = null;    // { code, name, jobTitle, email }
 
+// pendingSignup is also mirrored to localStorage: clicking the emailed
+// confirmation link can land the user on a fresh tab/page load (no
+// in-memory state), so we need it to survive that handoff.
+function savePendingSignup(obj) {
+  pendingSignup = obj;
+  try { localStorage.setItem("majlisPendingSignup", JSON.stringify(obj)); } catch (e) {}
+}
+function loadPendingSignup() {
+  try {
+    const raw = localStorage.getItem("majlisPendingSignup");
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function clearPendingSignup() {
+  pendingSignup = null;
+  try { localStorage.removeItem("majlisPendingSignup"); } catch (e) {}
+}
+
 const $ = (id) => document.getElementById(id);
 function t(key) { return UI[lang][key]; }
 function esc(str) {
@@ -347,7 +365,7 @@ async function handleAuthRequest() {
     }
   }
 
-  pendingSignup = { code, name, jobTitle, email };
+  savePendingSignup({ code, name, jobTitle, email });
   setAuthLoading(true, "authLoadingSend");
   const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
   setAuthLoading(false);
@@ -399,9 +417,11 @@ async function ensureProfile() {
     .from("profiles").select("*").eq("id", user.id).maybeSingle();
   if (existing) {
     currentProfile = existing;
+    clearPendingSignup();
     return true;
   }
 
+  if (!pendingSignup) pendingSignup = loadPendingSignup();
   if (!pendingSignup || !pendingSignup.code || !pendingSignup.name || !pendingSignup.jobTitle) {
     return false;
   }
@@ -410,6 +430,7 @@ async function ensureProfile() {
   });
   if (error || !profile) return false;
   currentProfile = Array.isArray(profile) ? profile[0] : profile;
+  clearPendingSignup();
   return true;
 }
 
@@ -428,6 +449,7 @@ async function signOut() {
   currentUser = null;
   currentProfile = null;
   feedPosts = [];
+  clearPendingSignup();
   $("authStepRequest").hidden = false;
   $("authStepVerify").hidden = true;
   $("authCode").value = ""; $("authName").value = ""; $("authJobTitle").value = ""; $("authEmail").value = "";
@@ -439,6 +461,10 @@ async function initAuth() {
   if (session) {
     const ok = await ensureProfile();
     if (ok) { await bootApp(); return; }
+    // Confirmed via the emailed link, but we don't have enough info (e.g.
+    // opened on a different device/browser) to finish creating a profile.
+    $("authEmail").value = session.user.email || "";
+    authError($("authRequestError"), t("authErrNeedProfileInfo"));
   }
   showAuthGate();
 }
