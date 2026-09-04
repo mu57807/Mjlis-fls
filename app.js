@@ -456,7 +456,21 @@ async function signOut() {
   showAuthGate();
 }
 
+function readRedirectError() {
+  // Supabase reports a failed confirmation/magic-link click (expired,
+  // already used, etc.) via error params in the URL hash or query string
+  // instead of a session — surface that instead of failing silently.
+  const sources = [window.location.hash.replace(/^#/, ""), window.location.search.replace(/^\?/, "")];
+  for (const raw of sources) {
+    const params = new URLSearchParams(raw);
+    const desc = params.get("error_description") || params.get("error_code") || params.get("error");
+    if (desc) return decodeURIComponent(desc).replace(/\+/g, " ");
+  }
+  return null;
+}
+
 async function initAuth() {
+  const redirectError = readRedirectError();
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
     const ok = await ensureProfile();
@@ -465,6 +479,8 @@ async function initAuth() {
     // opened on a different device/browser) to finish creating a profile.
     $("authEmail").value = session.user.email || "";
     authError($("authRequestError"), t("authErrNeedProfileInfo"));
+  } else if (redirectError) {
+    authError($("authRequestError"), redirectError);
   }
   showAuthGate();
 }
