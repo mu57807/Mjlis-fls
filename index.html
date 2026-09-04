@@ -10,14 +10,65 @@
 </head>
 <body>
 
-<div class="app-shell">
+<!-- Auth gate: covers the app until the user has a verified session + profile -->
+<div class="auth-gate" id="authGate">
+  <div class="auth-card">
+    <div class="brand auth-brand">
+      <span class="brand-mark" aria-hidden="true">🛡️</span>
+      <span class="brand-name">Majlis FLS</span>
+    </div>
+
+    <div id="authStepRequest">
+      <h1 class="auth-title" id="authRequestTitle"></h1>
+      <p class="auth-sub" id="authRequestSub"></p>
+
+      <label class="field-label" id="authCodeLabel"></label>
+      <input id="authCode" class="field-select" type="text" autocapitalize="characters" autocomplete="off">
+
+      <label class="field-label" id="authNameLabel"></label>
+      <input id="authName" class="field-select" type="text" autocomplete="name">
+
+      <label class="field-label" id="authJobTitleLabel"></label>
+      <input id="authJobTitle" class="field-select" type="text" autocomplete="organization-title">
+
+      <label class="field-label" id="authEmailLabel"></label>
+      <input id="authEmail" class="field-select" type="email" autocomplete="email">
+
+      <button id="authRequestBtn" class="btn btn-primary wide" type="button"></button>
+      <p class="auth-error" id="authRequestError" hidden></p>
+    </div>
+
+    <div id="authStepVerify" hidden>
+      <h1 class="auth-title" id="authVerifyTitle"></h1>
+      <p class="auth-sub" id="authVerifySub"></p>
+
+      <label class="field-label" id="authOtpLabel"></label>
+      <input id="authOtp" class="field-select" type="text" inputmode="numeric" autocomplete="one-time-code">
+
+      <button id="authVerifyBtn" class="btn btn-primary wide" type="button"></button>
+      <button id="authBackBtn" class="btn btn-secondary wide" type="button"></button>
+      <p class="auth-error" id="authVerifyError" hidden></p>
+    </div>
+
+    <div class="auth-loading" id="authLoading" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="authLoadingLabel"></span>
+    </div>
+  </div>
+</div>
+
+<div class="app-shell" id="appShell" hidden>
 
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">🛡️</span>
       <span class="brand-name">Majlis FLS</span>
     </div>
-    <button id="langToggle" class="lang-toggle" type="button">العربية</button>
+    <div class="topbar-actions">
+      <button id="adminNavBtn" class="lang-toggle" type="button" hidden></button>
+      <button id="langToggle" class="lang-toggle" type="button">العربية</button>
+      <button id="signOutBtn" class="lang-toggle icon-btn" type="button" title="Sign out">⏻</button>
+    </div>
   </header>
 
   <main class="feed-scroll" id="mainScroll">
@@ -72,9 +123,7 @@
   <div class="modal post-modal">
     <button class="modal-close" id="postModalClose" type="button" aria-label="Close">✕</button>
     <div class="post-video" id="postVideoArea">
-      <div class="video-progress"><div class="video-progress-bar" id="postProgressBar"></div></div>
       <button class="play-btn" id="postPlayBtn" type="button" aria-label="Play">▶</button>
-      <div class="rec-indicator" id="postRecIndicator" hidden><span class="rec-dot"></span><span id="postRecTime">0:00</span></div>
     </div>
     <div class="post-modal-body">
       <div class="post-modal-header">
@@ -104,7 +153,6 @@
   <div class="modal media-modal">
     <button class="modal-close" id="mediaModalClose" type="button" aria-label="Close">✕</button>
     <div class="post-video" id="mediaVideoArea">
-      <div class="video-progress"><div class="video-progress-bar" id="mediaProgressBar"></div></div>
       <button class="play-btn" id="mediaPlayBtn" type="button" aria-label="Play">▶</button>
     </div>
     <div class="media-modal-body">
@@ -123,26 +171,110 @@
       <strong id="recordThemeTitle"></strong>
     </div>
 
+    <input type="file" id="videoFileInput" accept="video/*" capture="user" hidden>
+
     <div class="record-stage" id="recordStage">
       <div class="record-camera" id="recordCamera">
-        <div class="rec-indicator" id="recIndicatorLive" hidden><span class="rec-dot"></span><span id="recLiveTime">0:00</span></div>
         <div class="record-hint" id="recordHint"></div>
       </div>
       <button class="btn btn-record wide" id="startRecordBtn" type="button"></button>
     </div>
 
     <div class="record-preview" id="recordPreview" hidden>
-      <div class="record-camera done">
-        <div class="preview-badge">✓ 0:0<span id="previewLen">0</span></div>
-      </div>
-      <label class="field-label" id="siteLabel"></label>
-      <select id="siteSelect" class="field-select"></select>
+      <video class="record-video-preview" id="recordVideoPreview" playsinline muted loop controls></video>
+      <p class="record-posting-as" id="recordPostingAs"></p>
       <label class="field-label" id="captionLabel"></label>
       <textarea id="captionInput" class="field-textarea" rows="2"></textarea>
       <div class="record-actions">
         <button class="btn btn-secondary" id="retakeBtn" type="button"></button>
         <button class="btn btn-primary" id="postRecordBtn" type="button"></button>
       </div>
+    </div>
+
+    <div class="record-progress" id="recordProgress" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="recordProgressLabel"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Admin panel -->
+<div class="modal-overlay" id="adminModal" hidden>
+  <div class="modal admin-modal">
+    <button class="modal-close" id="adminModalClose" type="button" aria-label="Close">✕</button>
+    <div class="admin-header">
+      <h2 id="adminTitle"></h2>
+      <div class="admin-tabs" id="adminTabs">
+        <button class="admin-tab" data-tab="codes" type="button" id="adminTabCodes"></button>
+        <button class="admin-tab" data-tab="theme" type="button" id="adminTabTheme"></button>
+        <button class="admin-tab" data-tab="leadership" type="button" id="adminTabLeadership"></button>
+        <button class="admin-tab" data-tab="materials" type="button" id="adminTabMaterials"></button>
+        <button class="admin-tab" data-tab="posts" type="button" id="adminTabPosts"></button>
+      </div>
+    </div>
+    <div class="admin-body" id="adminBody">
+
+      <section class="admin-panel" id="adminPanelCodes">
+        <form class="admin-form" id="inviteCodeForm">
+          <div class="admin-form-row">
+            <input id="codeCompany" class="field-select" type="text" required>
+            <input id="codeSite" class="field-select" type="text" required>
+          </div>
+          <div class="admin-form-row">
+            <select id="codeRole" class="field-select">
+              <option value="member" id="codeRoleMemberOpt"></option>
+              <option value="admin" id="codeRoleAdminOpt"></option>
+            </select>
+            <input id="codeMaxUses" class="field-select" type="number" min="1" value="1">
+          </div>
+          <button class="btn btn-primary wide" id="createCodeBtn" type="submit"></button>
+        </form>
+        <div class="admin-list" id="inviteCodeList"></div>
+      </section>
+
+      <section class="admin-panel" id="adminPanelTheme" hidden>
+        <form class="admin-form" id="themeForm">
+          <input id="themeQuarterLabel" class="field-select" type="text" required>
+          <input id="themeTitleEn" class="field-select" type="text" required>
+          <input id="themeTitleAr" class="field-select" type="text" required dir="rtl">
+          <textarea id="themePromptEn" class="field-textarea" rows="2" required></textarea>
+          <textarea id="themePromptAr" class="field-textarea" rows="2" required dir="rtl"></textarea>
+          <button class="btn btn-primary wide" id="createThemeBtn" type="submit"></button>
+        </form>
+        <div class="admin-list" id="themeList"></div>
+      </section>
+
+      <section class="admin-panel" id="adminPanelLeadership" hidden>
+        <form class="admin-form" id="leadershipForm">
+          <input id="leaderName" class="field-select" type="text" required>
+          <input id="leaderTitleEn" class="field-select" type="text" required>
+          <input id="leaderTitleAr" class="field-select" type="text" required dir="rtl">
+          <input id="leaderCaptionEn" class="field-select" type="text" required>
+          <input id="leaderCaptionAr" class="field-select" type="text" required dir="rtl">
+          <input id="leaderVideoFile" class="field-select" type="file" accept="video/*">
+          <button class="btn btn-primary wide" id="saveLeadershipBtn" type="submit"></button>
+        </form>
+      </section>
+
+      <section class="admin-panel" id="adminPanelMaterials" hidden>
+        <form class="admin-form" id="materialForm">
+          <select id="materialType" class="field-select">
+            <option value="video" id="materialTypeVideoOpt"></option>
+            <option value="doc" id="materialTypeDocOpt"></option>
+          </select>
+          <input id="materialTitleEn" class="field-select" type="text" required>
+          <input id="materialTitleAr" class="field-select" type="text" required dir="rtl">
+          <input id="materialMeta" class="field-select" type="text">
+          <input id="materialFile" class="field-select" type="file" required>
+          <button class="btn btn-primary wide" id="addMaterialBtn" type="submit"></button>
+        </form>
+        <div class="admin-list" id="materialList"></div>
+      </section>
+
+      <section class="admin-panel" id="adminPanelPosts" hidden>
+        <div class="admin-list" id="adminPostList"></div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -161,6 +293,8 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

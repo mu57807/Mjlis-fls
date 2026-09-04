@@ -1,12 +1,13 @@
 /* ============================================================
-   Majlis FLS — data + logic (no build tools, plain JS)
+   Majlis FLS — Supabase-backed app logic
    ============================================================ */
 
-/* ---------------- UI strings ---------------- */
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ---------------- UI chrome strings (app strings, not content) ---------------- */
 const UI = {
   en: {
     langToggleLabel: "العربية",
-    themeBadge: "Theme for Q4 2026",
     recordBtn: "Record Your Response",
     leadershipHeading: "Message from Leadership",
     learningHeading: "Learning from Incidents",
@@ -18,27 +19,87 @@ const UI = {
     reply: "Reply",
     send: "Send",
     respondingTo: "Responding to this quarter's theme",
-    startRecording: "Start Recording",
-    stopRecording: "Stop Recording",
+    openCamera: "Open Camera",
+    recordHint: "Tap Open Camera to record a selfie video (up to ~30 seconds).",
     retake: "Retake",
     postResponse: "Post Response",
     captionLabel: "Add a caption (optional)",
     captionPlaceholder: "Say a few words about your video...",
-    siteLabel: "Your site",
+    postingAs: (name, site) => `Posting as ${name} · ${site}`,
     postedToast: "Posted to the feed",
+    compressing: "Compressing your video…",
+    uploading: "Uploading…",
     ifadaTitle: "Ifada — Incident & Hazard Reporting",
     ifadaBody: "Ifada is our official corporate system for reporting hazards, near misses and incidents. Use it for anything that needs formal investigation and follow-up — the Majlis feed is for sharing and recognition only, and is not monitored for live hazards.",
     continueToIfada: "Continue to Ifada",
-    demoNotice: "Demo build — does not connect to a live system",
+    demoNotice: "This button links out to Ifada — it does not post anything here.",
     redirectingToast: "Redirecting to Ifada…",
     commentPlaceholder: "Add a comment...",
-    recordHint: "Tap Start Recording when you're ready. We'll capture up to 30 seconds.",
-    you: "You",
     justNow: "Just now",
+    signOut: "Sign out",
+    adminNav: "Admin",
+    // auth
+    authRequestTitle: "Sign in",
+    authRequestSub: "New here? Enter your invite code to join. Already a member? Just enter your email — leave the other fields blank.",
+    authCodeLabel: "Invite code (new members only)",
+    authNameLabel: "Your name",
+    authJobTitleLabel: "Job title",
+    authEmailLabel: "Email",
+    authRequestBtn: "Send code",
+    authVerifyTitle: "Check your email",
+    authOtpLabel: "6-digit code",
+    authVerifyBtn: "Verify & continue",
+    authBackBtn: "Back",
+    authLoadingSend: "Sending code…",
+    authLoadingVerify: "Verifying…",
+    authErrEmail: "Enter a valid email address.",
+    authErrCode: "That invite code isn't valid or has already been used up.",
+    authErrOtp: "That code didn't work — check it and try again.",
+    authErrNeedProfileInfo: "We couldn't find your account. Enter your invite code, name, and job title to finish signing up.",
+    authErrGeneric: "Something went wrong. Please try again.",
+    // admin
+    adminTitle: "Admin",
+    adminTabCodes: "Invite Codes",
+    adminTabTheme: "Theme",
+    adminTabLeadership: "Leadership",
+    adminTabMaterials: "Materials",
+    adminTabPosts: "Posts",
+    codeCompanyPh: "Company",
+    codeSitePh: "Site",
+    codeRoleMember: "Member",
+    codeRoleAdmin: "Admin",
+    createCodeBtn: "Create Invite Code",
+    deactivate: "Deactivate",
+    activate: "Activate",
+    usesLabel: (used, max) => `${used}/${max} used`,
+    themeQuarterPh: "Quarter label, e.g. Theme for Q4 2026",
+    themeTitleEnPh: "Theme title (English)",
+    themeTitleArPh: "Theme title (Arabic)",
+    themePromptEnPh: "Prompt (English)",
+    themePromptArPh: "Prompt (Arabic)",
+    createThemeBtn: "Add & Set as Current",
+    setCurrent: "Set as current",
+    current: "Current",
+    leaderNamePh: "Leader's name",
+    leaderTitleEnPh: "Job title (English)",
+    leaderTitleArPh: "Job title (Arabic)",
+    leaderCaptionEnPh: "Caption (English)",
+    leaderCaptionArPh: "Caption (Arabic)",
+    saveLeadershipBtn: "Save Leadership Message",
+    materialTypeVideo: "Video",
+    materialTypeDoc: "Document",
+    materialTitleEnPh: "Title (English)",
+    materialTitleArPh: "Title (Arabic)",
+    materialMetaPh: "e.g. 2:14 or PDF · 4 pages",
+    addMaterialBtn: "Add Material",
+    delete: "Delete",
+    hide: "Hide",
+    unhide: "Unhide",
+    savedToast: "Saved",
+    deletedToast: "Deleted",
   },
   ar: {
     langToggleLabel: "EN",
-    themeBadge: "موضوع الربع الرابع 2026",
     recordBtn: "سجّل ردّك",
     leadershipHeading: "رسالة من الإدارة",
     learningHeading: "دروس مستفادة من الحوادث",
@@ -50,323 +111,145 @@ const UI = {
     reply: "رد",
     send: "إرسال",
     respondingTo: "ردًا على موضوع هذا الربع",
-    startRecording: "بدء التسجيل",
-    stopRecording: "إيقاف التسجيل",
+    openCamera: "فتح الكاميرا",
+    recordHint: "اضغط على فتح الكاميرا لتسجيل مقطع ذاتي (حتى 30 ثانية تقريبًا).",
     retake: "إعادة التسجيل",
     postResponse: "نشر الرد",
     captionLabel: "أضف وصفًا (اختياري)",
     captionPlaceholder: "اكتب بضع كلمات عن مقطعك...",
-    siteLabel: "موقعك",
+    postingAs: (name, site) => `تنشر باسم ${name} · ${site}`,
     postedToast: "تم النشر في المجلس",
+    compressing: "جارٍ ضغط الفيديو…",
+    uploading: "جارٍ الرفع…",
     ifadaTitle: "إفادة — الإبلاغ عن الأخطار والحوادث",
     ifadaBody: "إفادة هو نظام الشركة الرسمي للإبلاغ عن الأخطار والحوادث الوشيكة والحوادث الفعلية. استخدمه لأي أمر يتطلب تحقيقًا رسميًا ومتابعة — منصة المجلس مخصصة للمشاركة والتقدير فقط، ولا تتم مراقبتها للأخطار الفعلية.",
     continueToIfada: "المتابعة إلى إفادة",
-    demoNotice: "نسخة تجريبية — لا تتصل بنظام فعلي",
+    demoNotice: "هذا الزر ينقلك إلى إفادة — ولا ينشر شيئًا هنا.",
     redirectingToast: "جارٍ التحويل إلى إفادة…",
     commentPlaceholder: "أضف تعليقًا...",
-    recordHint: "اضغط على بدء التسجيل عندما تكون جاهزًا. سنسجل حتى 30 ثانية.",
-    you: "أنت",
     justNow: "الآن",
+    signOut: "تسجيل الخروج",
+    adminNav: "الإدارة",
+    authRequestTitle: "تسجيل الدخول",
+    authRequestSub: "جديد هنا؟ أدخل رمز الدعوة للانضمام. عضو بالفعل؟ أدخل بريدك الإلكتروني فقط واترك الحقول الأخرى فارغة.",
+    authCodeLabel: "رمز الدعوة (للأعضاء الجدد فقط)",
+    authNameLabel: "اسمك",
+    authJobTitleLabel: "المسمى الوظيفي",
+    authEmailLabel: "البريد الإلكتروني",
+    authRequestBtn: "إرسال الرمز",
+    authVerifyTitle: "تحقق من بريدك الإلكتروني",
+    authOtpLabel: "الرمز المكوّن من 6 أرقام",
+    authVerifyBtn: "تحقق واستمر",
+    authBackBtn: "رجوع",
+    authLoadingSend: "جارٍ إرسال الرمز…",
+    authLoadingVerify: "جارٍ التحقق…",
+    authErrEmail: "أدخل بريدًا إلكترونيًا صالحًا.",
+    authErrCode: "رمز الدعوة غير صالح أو تم استخدامه بالكامل.",
+    authErrOtp: "الرمز غير صحيح — تحقق منه وحاول مرة أخرى.",
+    authErrNeedProfileInfo: "لم نجد حسابك. أدخل رمز الدعوة واسمك ومسمّاك الوظيفي لإكمال التسجيل.",
+    authErrGeneric: "حدث خطأ ما. حاول مرة أخرى.",
+    adminTitle: "الإدارة",
+    adminTabCodes: "رموز الدعوة",
+    adminTabTheme: "الموضوع",
+    adminTabLeadership: "الإدارة العليا",
+    adminTabMaterials: "المواد",
+    adminTabPosts: "المنشورات",
+    codeCompanyPh: "الشركة",
+    codeSitePh: "الموقع",
+    codeRoleMember: "عضو",
+    codeRoleAdmin: "مسؤول",
+    createCodeBtn: "إنشاء رمز دعوة",
+    deactivate: "تعطيل",
+    activate: "تفعيل",
+    usesLabel: (used, max) => `${used}/${max} استُخدم`,
+    themeQuarterPh: "تسمية الربع، مثل موضوع الربع الرابع 2026",
+    themeTitleEnPh: "عنوان الموضوع (إنجليزي)",
+    themeTitleArPh: "عنوان الموضوع (عربي)",
+    themePromptEnPh: "النص التحفيزي (إنجليزي)",
+    themePromptArPh: "النص التحفيزي (عربي)",
+    createThemeBtn: "إضافة وتعيين كموضوع حالي",
+    setCurrent: "تعيين كحالي",
+    current: "الحالي",
+    leaderNamePh: "اسم المسؤول",
+    leaderTitleEnPh: "المسمى الوظيفي (إنجليزي)",
+    leaderTitleArPh: "المسمى الوظيفي (عربي)",
+    leaderCaptionEnPh: "الوصف (إنجليزي)",
+    leaderCaptionArPh: "الوصف (عربي)",
+    saveLeadershipBtn: "حفظ رسالة الإدارة",
+    materialTypeVideo: "فيديو",
+    materialTypeDoc: "مستند",
+    materialTitleEnPh: "العنوان (إنجليزي)",
+    materialTitleArPh: "العنوان (عربي)",
+    materialMetaPh: "مثل 2:14 أو PDF · 4 صفحات",
+    addMaterialBtn: "إضافة مادة",
+    delete: "حذف",
+    hide: "إخفاء",
+    unhide: "إظهار",
+    savedToast: "تم الحفظ",
+    deletedToast: "تم الحذف",
   },
 };
 
-const SITES = [
-  { en: "Ruwais Refinery", ar: "مصفاة الرويس" },
-  { en: "Habshan Gas Complex", ar: "مجمع حبشان للغاز" },
-  { en: "Das Island Terminal", ar: "محطة جزيرة داس" },
-  { en: "Ghasha Offshore Platform", ar: "منصة الغشاء البحرية" },
-  { en: "Bab Onshore Field", ar: "حقل باب البري" },
-  { en: "Zakum Development Site", ar: "موقع تطوير زاكوم" },
-];
+/* ---------------- State ---------------- */
+let lang = "en";
+try { lang = localStorage.getItem("majlisLang") || "en"; } catch (e) {}
 
-const THEME = {
-  badgeKey: "themeBadge",
-  title: { en: "How I Respond Matters", ar: "استجابتي تُحدث فرقًا" },
-  prompt: {
-    en: "Record a 30-second selfie video telling us about a moment your response made the difference.",
-    ar: "سجّل مقطع فيديو ذاتي مدته 30 ثانية تحدثنا فيه عن لحظة أحدثت فيها استجابتك فرقًا.",
-  },
-};
+let currentUser = null;      // supabase auth user
+let currentProfile = null;   // profiles row
+let currentTheme = null;
+let leadershipMsg = null;
+let learningMaterials = [];
+let feedPosts = [];          // enriched posts: { ...row, profile, likeCount, commentCount, liked }
+let activePostId = null;
+let replyTarget = null;      // top-level comment id
+let pendingVideoBlob = null;
+let pendingVideoDuration = 0;
+let pendingSignup = null;    // { code, name, jobTitle, email }
 
-const LEADERSHIP = {
-  name: { en: "Eng. Khalifa Al Mansoori", ar: "المهندس خليفة المنصوري" },
-  title: {
-    en: "Senior Vice President, HSE & Operations Excellence",
-    ar: "نائب الرئيس الأول للصحة والسلامة والبيئة والتميز التشغيلي",
-  },
-  caption: {
-    en: "A message from leadership: why every response counts",
-    ar: "رسالة من الإدارة العليا: لماذا تُحدث كل استجابة فرقًا",
-  },
-  duration: "1:12",
-  gradient: ["#0F2A3D", "#1B5A54"],
-};
+const $ = (id) => document.getElementById(id);
+function t(key) { return UI[lang][key]; }
+function esc(str) {
+  const d = document.createElement("div");
+  d.textContent = str == null ? "" : String(str);
+  return d.innerHTML;
+}
 
-const LEARNING = [
-  {
-    type: "video",
-    title: { en: "Near Miss: Confined Space Entry", ar: "حادثة وشيكة: الدخول إلى حيز مغلق" },
-    meta: "2:14",
-    gradient: ["#7A1F1F", "#3A0E0E"],
-    icon: "🎬",
-  },
-  {
-    type: "video",
-    title: { en: "Toolbox Talk: Heat Stress Awareness", ar: "حديث ما قبل العمل: التوعية بالإجهاد الحراري" },
-    meta: "1:45",
-    gradient: ["#B5691C", "#5E3208"],
-    icon: "🎬",
-  },
-  {
-    type: "doc",
-    title: { en: "Q3 Incident Report Summary", ar: "ملخص تقرير حوادث الربع الثالث" },
-    meta: { en: "PDF · 4 pages", ar: "PDF · 4 صفحات" },
-    gradient: ["#264D73", "#122436"],
-    icon: "📄",
-  },
-  {
-    type: "video",
-    title: { en: "LOTO Procedure Refresher", ar: "تذكير بإجراءات العزل والإغلاق (LOTO)" },
-    meta: "3:02",
-    gradient: ["#1B5A54", "#0B2B28"],
-    icon: "🎬",
-  },
-  {
-    type: "doc",
-    title: { en: "Root Cause Analysis: Pipeline Leak", ar: "تحليل السبب الجذري: تسرب خط الأنابيب" },
-    meta: { en: "PDF · 6 pages", ar: "PDF · 6 صفحات" },
-    gradient: ["#4A3B7C", "#241D3D"],
-    icon: "📄",
-  },
-];
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return t("justNow");
+  if (mins < 60) return lang === "ar" ? `قبل ${mins} د` : `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return lang === "ar" ? `قبل ${hours} س` : `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return lang === "ar" ? `قبل ${days} يوم` : `${days}d ago`;
+}
 
 const GRADIENTS = [
-  ["#0B4F4A", "#0F2A3D"],
-  ["#B5691C", "#5E3208"],
-  ["#264D73", "#122436"],
-  ["#7A1F1F", "#3A0E0E"],
-  ["#4A3B7C", "#241D3D"],
-  ["#1B5A54", "#0B2B28"],
+  ["#0B4F4A", "#0F2A3D"], ["#B5691C", "#5E3208"], ["#264D73", "#122436"],
+  ["#7A1F1F", "#3A0E0E"], ["#4A3B7C", "#241D3D"], ["#1B5A54", "#0B2B28"],
   ["#8A6D1B", "#4A3908"],
 ];
-
-function gradientFor(seed) {
-  const idx = Math.abs(hashCode(seed)) % GRADIENTS.length;
-  return GRADIENTS[idx];
-}
 function hashCode(str) {
   let h = 0;
   for (let i = 0; i < str.length; i++) { h = (h << 5) - h + str.charCodeAt(i); h |= 0; }
   return h;
 }
+function gradientFor(seed) { return GRADIENTS[Math.abs(hashCode(String(seed))) % GRADIENTS.length]; }
 function initials(name) {
-  return name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
+  return (name || "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+}
+function formatTime(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/* ---------------- Feed data ---------------- */
-const FEED_SEED = [
-  {
-    id: "p1",
-    name: "Ahmed Al Falasi",
-    nameAr: "أحمد الفلاسي",
-    role: { en: "Rigging Supervisor", ar: "مشرف رفع وتأهيل" },
-    site: SITES[0],
-    time: { en: "2 days ago", ar: "قبل يومين" },
-    duration: "0:28",
-    caption: {
-      en: "Stopped a crane lift when I noticed the rigging certificate had expired. Two minutes felt long but nobody got hurt.",
-      ar: "أوقفت عملية رفع بالرافعة عندما لاحظت أن شهادة معدات الرفع منتهية الصلاحية. دقيقتان بدتا طويلتين لكن لم يتأذَ أحد.",
-    },
-    likes: 47,
-    comments: [
-      {
-        name: "Fatima Al Zaabi",
-        text: { en: "This is exactly the kind of stop we want to see. Proud of you Ahmed.", ar: "هذا بالضبط نوع التوقف الذي نريد رؤيته. فخورة بك يا أحمد." },
-        time: { en: "1d", ar: "يوم" },
-        replies: [
-          { name: "Ahmed Al Falasi", text: { en: "Thank you Fatima! The team backed me up right away.", ar: "شكرًا فاطمة! الفريق دعمني فورًا." }, time: { en: "22h", ar: "22 س" } },
-        ],
-      },
-      {
-        name: "Khalid Al Blooshi",
-        text: { en: "Expired rigging certs are more common than people think. Good catch.", ar: "شهادات الرفع المنتهية أكثر شيوعًا مما يظن الناس. ملاحظة ممتازة." },
-        time: { en: "1d", ar: "يوم" },
-        replies: [],
-      },
-      {
-        name: "Noora Al Suwaidi",
-        text: { en: "Sharing this with my crew in tomorrow's toolbox talk.", ar: "سأشارك هذا مع فريقي في حديث الغد قبل العمل." },
-        time: { en: "20h", ar: "20 س" },
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: "p2",
-    name: "Fatima Al Zaabi",
-    nameAr: "فاطمة الزعابي",
-    role: { en: "Process Operator", ar: "مشغلة عمليات" },
-    site: SITES[1],
-    time: { en: "3 days ago", ar: "قبل 3 أيام" },
-    duration: "0:31",
-    caption: {
-      en: "Gas readings drifted during a confined space entry. Called a timeout immediately and evacuated the team — investigation found a faulty purge valve.",
-      ar: "تغيرت قراءات الغاز أثناء الدخول إلى حيز مغلق، فأوقفت العمل فورًا وأخليت الفريق — وكشف التحقيق عن عطل في صمام التطهير.",
-    },
-    likes: 63,
-    comments: [
-      {
-        name: "Mohammed Al Shamsi",
-        text: { en: "Trusting the gas detector over the schedule — that's leadership.", ar: "الثقة بجهاز كشف الغاز بدلًا من الجدول الزمني — هذه هي القيادة." },
-        time: { en: "2d", ar: "يومان" },
-        replies: [],
-      },
-      {
-        name: "Yousef Al Marri",
-        text: { en: "What was the reading when you called it?", ar: "كم كانت القراءة عندما أوقفت العمل؟" },
-        time: { en: "2d", ar: "يومان" },
-        replies: [
-          { name: "Fatima Al Zaabi", text: { en: "O2 dropped to 19.2% in under a minute — that was enough for me.", ar: "انخفض الأكسجين إلى 19.2٪ خلال أقل من دقيقة — كان ذلك كافيًا لي." }, time: { en: "1d", ar: "يوم" } },
-          { name: "Yousef Al Marri", text: { en: "Good call, that drop is not normal.", ar: "قرار صحيح، هذا الانخفاض غير طبيعي." }, time: { en: "1d", ar: "يوم" } },
-        ],
-      },
-      {
-        name: "Layla Al Hashimi",
-        text: { en: "Can we get this added to the confined space refresher video?", ar: "هل يمكن إضافة هذا إلى فيديو تذكير العمل في الأماكن المغلقة؟" },
-        time: { en: "1d", ar: "يوم" },
-        replies: [],
-      },
-      {
-        name: "Sara Al Kaabi",
-        text: { en: "This is why we never override the monitor. Well done Fatima.", ar: "لهذا السبب لا نتجاوز أبدًا جهاز المراقبة. أحسنتِ يا فاطمة." },
-        time: { en: "18h", ar: "18 س" },
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: "p3",
-    name: "Mohammed Al Shamsi",
-    nameAr: "محمد الشامسي",
-    role: { en: "HSE Coordinator", ar: "منسق صحة وسلامة" },
-    site: SITES[2],
-    time: { en: "4 days ago", ar: "قبل 4 أيام" },
-    duration: "0:24",
-    caption: {
-      en: "Saw a contractor doing hot work without a fire watch posted. Paused the job until we fixed it properly.",
-      ar: "شاهدت مقاولًا يقوم بأعمال ساخنة دون وجود مراقب حريق، فأوقفت العمل حتى تم تصحيح الوضع بشكل صحيح.",
-    },
-    likes: 38,
-    comments: [
-      {
-        name: "Ahmed Al Falasi",
-        text: { en: "No fire watch is a hard stop, every time. Good job brother.", ar: "غياب مراقب الحريق يعني إيقافًا فوريًا دائمًا. أحسنت يا أخي." },
-        time: { en: "3d", ar: "3 أيام" },
-        replies: [],
-      },
-      {
-        name: "Noora Al Suwaidi",
-        text: { en: "Which contractor crew was this? We should loop in their supervisor.", ar: "أي طاقم مقاول كان هذا؟ يجب إشراك مشرفهم." },
-        time: { en: "3d", ar: "3 أيام" },
-        replies: [
-          { name: "Mohammed Al Shamsi", text: { en: "Already flagged it with their site lead, they retrained the crew same day.", ar: "تم إبلاغ رئيس موقعهم بالفعل، وأعادوا تدريب الطاقم في نفس اليوم." }, time: { en: "2d", ar: "يومان" } },
-        ],
-      },
-    ],
-  },
-  {
-    id: "p4",
-    name: "Sara Al Kaabi",
-    nameAr: "سارة الكعبي",
-    role: { en: "Lifting Operations Lead", ar: "مسؤولة عمليات الرفع" },
-    site: SITES[3],
-    time: { en: "5 days ago", ar: "قبل 5 أيام" },
-    duration: "0:29",
-    caption: {
-      en: "A pallet shifted mid-lift on the platform. My quick call to clear the drop zone kept everyone outside the radius.",
-      ar: "انزلقت منصة نقالة أثناء عملية الرفع على المنصة. طلبي السريع بإخلاء منطقة السقوط أبقى الجميع خارج نطاق الخطر.",
-    },
-    likes: 55,
-    comments: [
-      {
-        name: "Khalid Al Blooshi",
-        text: { en: "Offshore lifts leave no room for hesitation. Nicely handled.", ar: "عمليات الرفع البحرية لا تحتمل التردد. تعامل ممتاز." },
-        time: { en: "4d", ar: "4 أيام" },
-        replies: [],
-      },
-      {
-        name: "Fatima Al Zaabi",
-        text: { en: "Was the load re-secured before continuing?", ar: "هل تم تثبيت الحمولة مجددًا قبل المتابعة؟" },
-        time: { en: "4d", ar: "4 أيام" },
-        replies: [
-          { name: "Sara Al Kaabi", text: { en: "Yes — full re-rig and a second banksman before we resumed.", ar: "نعم — أعدنا تجهيز الرفع بالكامل وأضفنا مراقب رفع ثانٍ قبل الاستئناف." }, time: { en: "3d", ar: "3 أيام" } },
-        ],
-      },
-      {
-        name: "Yousef Al Marri",
-        text: { en: "Adding this clip to our next lifting supervisor briefing.", ar: "سأضيف هذا المقطع إلى إحاطة مشرفي الرفع القادمة." },
-        time: { en: "2d", ar: "يومان" },
-        replies: [],
-      },
-      {
-        name: "Layla Al Hashimi",
-        text: { en: "Great awareness under pressure, Sara.", ar: "وعي رائع تحت الضغط يا سارة." },
-        time: { en: "2d", ar: "يومان" },
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: "p5",
-    name: "Yousef Al Marri",
-    nameAr: "يوسف المرّي",
-    role: { en: "Field Supervisor", ar: "مشرف ميداني" },
-    site: SITES[4],
-    time: { en: "6 days ago", ar: "قبل 6 أيام" },
-    duration: "0:26",
-    caption: {
-      en: "Wind speed jumped right before start-up. Delayed by 20 minutes and it was the right call — gusts hit 42 km/h ten minutes later.",
-      ar: "ارتفعت سرعة الرياح فجأة قبل بدء التشغيل. أجّلت العملية 20 دقيقة وكان القرار صائبًا — إذ وصلت الرياح إلى 42 كم/س بعد عشر دقائق.",
-    },
-    likes: 29,
-    comments: [
-      {
-        name: "Mohammed Al Shamsi",
-        text: { en: "Patience over pressure. Solid decision.", ar: "الصبر أهم من الضغط. قرار متين." },
-        time: { en: "5d", ar: "5 أيام" },
-        replies: [],
-      },
-      {
-        name: "Sara Al Kaabi",
-        text: { en: "This matches the near miss we had last month. Weather calls are always worth the delay.", ar: "هذا يتطابق مع الحادثة الوشيكة التي حدثت لدينا الشهر الماضي. قرارات الطقس تستحق التأخير دائمًا." },
-        time: { en: "5d", ar: "5 أيام" },
-        replies: [],
-      },
-    ],
-  },
-];
-
-/* ---------------- State ---------------- */
-let lang = localStorage.getItem("majlisLang") || "en";
-let feed = JSON.parse(JSON.stringify(FEED_SEED));
-let likedIds = new Set();
-let activePostId = null;
-let replyTarget = null; // { commentIndex }
-let recordTimer = null;
-let recordSeconds = 0;
-
-const $ = (id) => document.getElementById(id);
-function t(key) { return UI[lang][key]; }
-function loc(field) { return field[lang]; }
-
-/* ---------------- Render: static chrome ---------------- */
+/* ---------------- Chrome / static UI text ---------------- */
 function applyChrome() {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   $("langToggle").textContent = t("langToggleLabel");
-  $("themeBadge").textContent = t("themeBadge");
-  $("themeTitle").textContent = loc(THEME.title);
-  $("themePrompt").textContent = loc(THEME.prompt);
   $("recordBtnLabel").textContent = t("recordBtn");
   $("leadershipHeading").textContent = t("leadershipHeading");
   $("learningHeading").textContent = t("learningHeading");
@@ -374,12 +257,10 @@ function applyChrome() {
   $("ifadaBtnLabel").textContent = t("ifadaBtn");
   $("ifadaSubLabel").textContent = t("ifadaSub");
   $("respondingToLabel").textContent = t("respondingTo");
-  $("recordThemeTitle").textContent = loc(THEME.title);
-  $("startRecordBtn").textContent = t("startRecording");
   $("recordHint").textContent = t("recordHint");
+  $("startRecordBtn").textContent = t("openCamera");
   $("retakeBtn").textContent = t("retake");
   $("postRecordBtn").textContent = t("postResponse");
-  $("siteLabel").textContent = t("siteLabel");
   $("captionLabel").textContent = t("captionLabel");
   $("captionInput").placeholder = t("captionPlaceholder");
   $("commentInput").placeholder = t("commentPlaceholder");
@@ -388,103 +269,309 @@ function applyChrome() {
   $("ifadaModalBody").textContent = t("ifadaBody");
   $("ifadaContinueBtn").textContent = t("continueToIfada");
   $("ifadaDemoNotice").textContent = t("demoNotice");
+  $("signOutBtn").title = t("signOut");
+  $("adminNavBtn").textContent = t("adminNav");
 
-  const siteSelect = $("siteSelect");
-  siteSelect.innerHTML = "";
-  SITES.forEach((s) => {
-    const opt = document.createElement("option");
-    opt.value = s.en;
-    opt.textContent = loc(s);
-    siteSelect.appendChild(opt);
-  });
+  $("authRequestTitle").textContent = t("authRequestTitle");
+  $("authRequestSub").textContent = t("authRequestSub");
+  $("authCodeLabel").textContent = t("authCodeLabel");
+  $("authNameLabel").textContent = t("authNameLabel");
+  $("authJobTitleLabel").textContent = t("authJobTitleLabel");
+  $("authEmailLabel").textContent = t("authEmailLabel");
+  $("authRequestBtn").textContent = t("authRequestBtn");
+  $("authVerifyTitle").textContent = t("authVerifyTitle");
+  $("authOtpLabel").textContent = t("authOtpLabel");
+  $("authVerifyBtn").textContent = t("authVerifyBtn");
+  $("authBackBtn").textContent = t("authBackBtn");
+
+  if (currentProfile) {
+    $("recordThemeTitle").textContent = currentTheme ? loc(currentTheme, "title") : "";
+    $("recordPostingAs").textContent = t("postingAs")(currentProfile.name, currentProfile.site);
+  }
+
+  applyAdminChrome();
 }
 
-/* ---------------- Render: leadership ---------------- */
+function loc(row, field) {
+  if (!row) return "";
+  return row[`${field}_${lang}`] ?? "";
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+
+function showAuthGate() {
+  $("authGate").hidden = false;
+  $("appShell").hidden = true;
+}
+function showApp() {
+  $("authGate").hidden = true;
+  $("appShell").hidden = false;
+}
+function setAuthLoading(on, labelKey) {
+  $("authLoading").hidden = !on;
+  if (labelKey) $("authLoadingLabel").textContent = t(labelKey);
+}
+function authError(stepEl, msg) {
+  stepEl.hidden = false;
+  stepEl.textContent = msg;
+}
+
+async function handleAuthRequest() {
+  const code = $("authCode").value.trim().toUpperCase();
+  const name = $("authName").value.trim();
+  const jobTitle = $("authJobTitle").value.trim();
+  const email = $("authEmail").value.trim();
+  $("authRequestError").hidden = true;
+
+  if (!email || !email.includes("@")) {
+    authError($("authRequestError"), t("authErrEmail"));
+    return;
+  }
+
+  if (code) {
+    setAuthLoading(true, "authLoadingSend");
+    const { data: validation, error: vErr } = await supabaseClient.rpc("validate_invite_code", { p_code: code });
+    if (vErr || !validation || !validation[0] || !validation[0].valid) {
+      setAuthLoading(false);
+      authError($("authRequestError"), t("authErrCode"));
+      return;
+    }
+  }
+
+  pendingSignup = { code, name, jobTitle, email };
+  setAuthLoading(true, "authLoadingSend");
+  const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  setAuthLoading(false);
+  if (error) {
+    authError($("authRequestError"), error.message || t("authErrGeneric"));
+    return;
+  }
+  $("authVerifySub").textContent = lang === "ar" ? `أدخل الرمز المرسل إلى ${email}` : `Enter the code we sent to ${email}`;
+  $("authStepRequest").hidden = true;
+  $("authStepVerify").hidden = false;
+  $("authOtp").value = "";
+  $("authVerifyError").hidden = true;
+}
+
+async function handleAuthVerify() {
+  const token = $("authOtp").value.trim();
+  $("authVerifyError").hidden = true;
+  if (!token || !pendingSignup) return;
+
+  setAuthLoading(true, "authLoadingVerify");
+  const { data, error } = await supabaseClient.auth.verifyOtp({
+    email: pendingSignup.email, token, type: "email",
+  });
+  if (error || !data.session) {
+    setAuthLoading(false);
+    authError($("authVerifyError"), t("authErrOtp"));
+    return;
+  }
+
+  const ok = await ensureProfile();
+  setAuthLoading(false);
+  if (!ok) {
+    authError($("authVerifyError"), t("authErrNeedProfileInfo"));
+    $("authStepVerify").hidden = true;
+    $("authStepRequest").hidden = false;
+    return;
+  }
+  await bootApp();
+}
+
+// Makes sure a profiles row exists for the current session, redeeming the
+// pending invite code if needed. Returns true iff a profile now exists.
+async function ensureProfile() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return false;
+  currentUser = user;
+
+  const { data: existing } = await supabaseClient
+    .from("profiles").select("*").eq("id", user.id).maybeSingle();
+  if (existing) {
+    currentProfile = existing;
+    return true;
+  }
+
+  if (!pendingSignup || !pendingSignup.code || !pendingSignup.name || !pendingSignup.jobTitle) {
+    return false;
+  }
+  const { data: profile, error } = await supabaseClient.rpc("redeem_invite_code", {
+    p_code: pendingSignup.code, p_name: pendingSignup.name, p_job_title: pendingSignup.jobTitle,
+  });
+  if (error || !profile) return false;
+  currentProfile = Array.isArray(profile) ? profile[0] : profile;
+  return true;
+}
+
+async function bootApp() {
+  showApp();
+  $("adminNavBtn").hidden = !currentProfile.is_admin;
+  await Promise.all([loadTheme(), loadLeadership(), loadLearningMaterials(), loadFeed()]);
+  applyChrome();
+  renderLeadership();
+  renderLearning();
+  renderFeed();
+}
+
+async function signOut() {
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  currentProfile = null;
+  feedPosts = [];
+  $("authStepRequest").hidden = false;
+  $("authStepVerify").hidden = true;
+  $("authCode").value = ""; $("authName").value = ""; $("authJobTitle").value = ""; $("authEmail").value = "";
+  showAuthGate();
+}
+
+async function initAuth() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session) {
+    const ok = await ensureProfile();
+    if (ok) { await bootApp(); return; }
+  }
+  showAuthGate();
+}
+
+/* ============================================================
+   DATA LOADING
+   ============================================================ */
+
+async function loadTheme() {
+  const { data } = await supabaseClient.from("themes").select("*").eq("is_current", true).maybeSingle();
+  currentTheme = data || null;
+  $("themeBadge").textContent = currentTheme ? currentTheme.quarter_label : "";
+  $("themeTitle").textContent = currentTheme ? loc(currentTheme, "title") : "";
+  $("themePrompt").textContent = currentTheme ? loc(currentTheme, "prompt") : "";
+}
+
+async function loadLeadership() {
+  const { data } = await supabaseClient.from("leadership_message").select("*").eq("is_current", true).maybeSingle();
+  leadershipMsg = data || null;
+}
+
+async function loadLearningMaterials() {
+  const { data } = await supabaseClient.from("learning_materials").select("*").order("sort_order", { ascending: true });
+  learningMaterials = data || [];
+}
+
+async function loadFeed() {
+  const { data: posts } = await supabaseClient
+    .from("posts")
+    .select("*, profiles(name, company, site)")
+    .eq("is_hidden", false)
+    .order("created_at", { ascending: false });
+  const rows = posts || [];
+  const ids = rows.map((p) => p.id);
+
+  let likeRows = [];
+  let commentRows = [];
+  if (ids.length) {
+    const [{ data: likes }, { data: comments }] = await Promise.all([
+      supabaseClient.from("likes").select("post_id, user_id").in("post_id", ids),
+      supabaseClient.from("comments").select("id, post_id").in("post_id", ids),
+    ]);
+    likeRows = likes || [];
+    commentRows = comments || [];
+  }
+
+  feedPosts = rows.map((p) => ({
+    ...p,
+    likeCount: likeRows.filter((l) => l.post_id === p.id).length,
+    liked: currentUser ? likeRows.some((l) => l.post_id === p.id && l.user_id === currentUser.id) : false,
+    commentCount: commentRows.filter((c) => c.post_id === p.id).length,
+  }));
+}
+
+/* ============================================================
+   RENDER: leadership / learning
+   ============================================================ */
+
 function renderLeadership() {
-  const [c1, c2] = LEADERSHIP.gradient;
-  $("leadershipCard").innerHTML = `
+  const el = $("leadershipCard");
+  if (!leadershipMsg) { el.innerHTML = ""; el.onclick = null; return; }
+  const [c1, c2] = gradientFor("leadership");
+  el.className = "leadership-card";
+  el.innerHTML = `
     <div class="leadership-thumb" style="background:linear-gradient(150deg, ${c1}, ${c2})">
-      ${initials(loc(LEADERSHIP.name))}
+      ${esc(initials(leadershipMsg.name))}
       <div class="mini-play">▶</div>
     </div>
     <div class="leadership-info">
-      <p class="leadership-name">${loc(LEADERSHIP.name)}</p>
-      <p class="leadership-title">${loc(LEADERSHIP.title)}</p>
-      <p class="leadership-caption">${loc(LEADERSHIP.caption)}</p>
-      <span class="leadership-watch">${t("watchVideo")} · ${LEADERSHIP.duration}</span>
+      <p class="leadership-name">${esc(leadershipMsg.name)}</p>
+      <p class="leadership-title">${esc(loc(leadershipMsg, "title"))}</p>
+      <p class="leadership-caption">${esc(loc(leadershipMsg, "caption"))}</p>
+      <span class="leadership-watch">${t("watchVideo")}</span>
     </div>
   `;
-  $("leadershipCard").className = "leadership-card";
-  $("leadershipCard").onclick = () => openMedia({
-    title: loc(LEADERSHIP.caption),
-    meta: `${loc(LEADERSHIP.name)} — ${loc(LEADERSHIP.title)}`,
-    gradient: LEADERSHIP.gradient,
+  el.onclick = () => openMedia({
+    title: loc(leadershipMsg, "caption"),
+    meta: `${leadershipMsg.name} — ${loc(leadershipMsg, "title")}`,
+    gradient: gradientFor("leadership"),
     type: "video",
+    url: leadershipMsg.video_url,
   });
 }
 
-/* ---------------- Render: learning row ---------------- */
 function renderLearning() {
   const row = $("learningRow");
   row.innerHTML = "";
-  LEARNING.forEach((item) => {
-    const [c1, c2] = item.gradient;
-    const metaText = typeof item.meta === "string" ? item.meta : loc(item.meta);
+  learningMaterials.forEach((item) => {
+    const [c1, c2] = gradientFor(item.id);
     const card = document.createElement("div");
     card.className = "learning-card";
     card.innerHTML = `
       <div class="learning-thumb" style="background:linear-gradient(150deg, ${c1}, ${c2})">
-        ${item.icon}
+        ${item.type === "video" ? "🎬" : "📄"}
         <span class="learning-type-badge">${item.type === "video" ? t("watchVideo") : t("viewDocument")}</span>
-        <span class="learning-meta-badge">${metaText}</span>
+        <span class="learning-meta-badge">${esc(item.meta || "")}</span>
       </div>
       <div class="learning-body">
-        <p class="learning-title">${loc(item.title)}</p>
+        <p class="learning-title">${esc(loc(item, "title"))}</p>
       </div>
     `;
     card.onclick = () => openMedia({
-      title: loc(item.title),
-      meta: metaText,
-      gradient: item.gradient,
-      type: item.type,
+      title: loc(item, "title"), meta: item.meta || "", gradient: [c1, c2],
+      type: item.type, url: item.file_url,
     });
     row.appendChild(card);
   });
 }
 
-/* ---------------- Render: feed ---------------- */
-function totalComments(post) {
-  return post.comments.reduce((sum, c) => sum + 1 + (c.replies ? c.replies.length : 0), 0);
-}
+/* ============================================================
+   RENDER: feed
+   ============================================================ */
 
 function renderFeed() {
   const list = $("feedList");
   list.innerHTML = "";
-  feed.forEach((post) => {
+  feedPosts.forEach((post) => {
+    const profile = post.profiles || {};
     const [c1, c2] = gradientFor(post.id);
-    const displayName = lang === "ar" && post.nameAr ? post.nameAr : post.name;
-    const liked = likedIds.has(post.id);
     const card = document.createElement("article");
     card.className = "feed-card";
     card.innerHTML = `
       <div class="feed-card-top">
-        <div class="avatar" style="background:linear-gradient(150deg, ${c1}, ${c2})">${initials(post.name)}</div>
+        <div class="avatar" style="background:linear-gradient(150deg, ${c1}, ${c2})">${esc(initials(profile.name))}</div>
         <div class="feed-who">
-          <div class="feed-name">${displayName}</div>
-          <div class="feed-meta">${loc(post.site)} · ${loc(post.time)}</div>
+          <div class="feed-name">${esc(profile.name || "")}</div>
+          <div class="feed-meta">${esc(profile.company || "")} · ${esc(profile.site || "")} · ${timeAgo(post.created_at)}</div>
         </div>
       </div>
       <div class="feed-thumb" style="background:linear-gradient(150deg, ${c1}, ${c2})">
-        <div class="avatar-big">${initials(post.name)}</div>
+        <div class="avatar-big">${esc(initials(profile.name))}</div>
         <div class="play-overlay"><div class="play-circle">▶</div></div>
-        <div class="duration-chip">${post.duration}</div>
+        ${post.duration_seconds ? `<div class="duration-chip">${formatTime(post.duration_seconds)}</div>` : ""}
       </div>
-      <p class="feed-caption">${loc(post.caption)}</p>
+      ${post.caption ? `<p class="feed-caption">${esc(post.caption)}</p>` : ""}
       <div class="feed-actions">
-        <button class="action-pill like-pill ${liked ? "liked" : ""}" data-id="${post.id}" type="button">
-          <span class="heart">${liked ? "♥" : "♡"}</span><span class="like-count">${post.likes}</span>
+        <button class="action-pill like-pill ${post.liked ? "liked" : ""}" type="button">
+          <span class="heart">${post.liked ? "♥" : "♡"}</span><span class="like-count">${post.likeCount}</span>
         </button>
-        <span class="action-pill">💬 <span>${totalComments(post)}</span></span>
+        <span class="action-pill">💬 <span>${post.commentCount}</span></span>
       </div>
     `;
     card.querySelector(".like-pill").addEventListener("click", (e) => {
@@ -496,322 +583,514 @@ function renderFeed() {
   });
 }
 
-function toggleLike(id) {
-  const post = feed.find((p) => p.id === id);
+async function toggleLike(id) {
+  if (!currentUser) return;
+  const post = feedPosts.find((p) => p.id === id);
   if (!post) return;
-  if (likedIds.has(id)) {
-    likedIds.delete(id);
-    post.likes -= 1;
+  if (post.liked) {
+    post.liked = false; post.likeCount -= 1;
+    renderFeed(); if (activePostId === id) renderPostModal();
+    await supabaseClient.from("likes").delete().eq("post_id", id).eq("user_id", currentUser.id);
   } else {
-    likedIds.add(id);
-    post.likes += 1;
+    post.liked = true; post.likeCount += 1;
+    renderFeed(); if (activePostId === id) renderPostModal();
+    await supabaseClient.from("likes").insert({ post_id: id, user_id: currentUser.id });
   }
-  renderFeed();
-  if (activePostId === id) renderPostModal();
 }
 
-/* ---------------- Post modal ---------------- */
-function openPost(id) {
+/* ============================================================
+   Post modal + comments
+   ============================================================ */
+
+async function openPost(id) {
   activePostId = id;
   replyTarget = null;
+  $("replyChip").hidden = true;
   renderPostModal();
   showModal("postModal");
   resetPostVideo();
+  await loadAndRenderComments(id);
 }
 
 function renderPostModal() {
-  const post = feed.find((p) => p.id === activePostId);
+  const post = feedPosts.find((p) => p.id === activePostId);
   if (!post) return;
+  const profile = post.profiles || {};
   const [c1, c2] = gradientFor(post.id);
-  const displayName = lang === "ar" && post.nameAr ? post.nameAr : post.name;
-  const liked = likedIds.has(post.id);
 
   $("postVideoArea").style.background = `linear-gradient(150deg, ${c1}, ${c2})`;
-  $("postModalAvatar").textContent = initials(post.name);
+  $("postVideoArea").dataset.url = post.video_url || "";
+  $("postModalAvatar").textContent = initials(profile.name);
   $("postModalAvatar").style.background = `linear-gradient(150deg, ${c1}, ${c2})`;
-  $("postModalName").textContent = displayName;
-  $("postModalSite").textContent = `${loc(post.site)} · ${loc(post.time)}`;
-  $("postModalCaption").textContent = loc(post.caption);
-  $("postModalLikeCount").textContent = post.likes;
-  $("postModalHeart").textContent = liked ? "♥" : "♡";
-  $("postModalLike").className = "like-btn" + (liked ? " liked" : "");
-
-  const commentsEl = $("postModalComments");
-  commentsEl.innerHTML = "";
-  post.comments.forEach((c, idx) => commentsEl.appendChild(renderComment(c, idx)));
+  $("postModalName").textContent = profile.name || "";
+  $("postModalSite").textContent = `${profile.company || ""} · ${profile.site || ""} · ${timeAgo(post.created_at)}`;
+  $("postModalCaption").textContent = post.caption || "";
+  $("postModalLikeCount").textContent = post.likeCount;
+  $("postModalHeart").textContent = post.liked ? "♥" : "♡";
+  $("postModalLike").className = "like-btn" + (post.liked ? " liked" : "");
 }
 
-function renderComment(comment, commentIndex) {
-  const [c1, c2] = gradientFor(comment.name);
+async function loadAndRenderComments(postId) {
+  const commentsEl = $("postModalComments");
+  commentsEl.innerHTML = "";
+  const { data: rows } = await supabaseClient
+    .from("comments")
+    .select("*, profiles(name, company, site)")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+  const all = rows || [];
+  const topLevel = all.filter((c) => !c.parent_id);
+  topLevel.forEach((c) => {
+    c.replies = all.filter((r) => r.parent_id === c.id);
+    commentsEl.appendChild(renderComment(c));
+  });
+}
+
+function renderComment(comment) {
+  const profile = comment.profiles || {};
+  const [c1, c2] = gradientFor(comment.user_id);
   const wrap = document.createElement("div");
   wrap.className = "comment-row";
   wrap.innerHTML = `
-    <div class="comment-avatar" style="background:linear-gradient(150deg, ${c1}, ${c2})">${initials(comment.name)}</div>
+    <div class="comment-avatar" style="background:linear-gradient(150deg, ${c1}, ${c2})">${esc(initials(profile.name))}</div>
     <div class="comment-body">
       <div class="comment-bubble">
-        <div class="comment-name">${comment.name}</div>
-        <div class="comment-text">${loc(comment.text)}</div>
+        <div class="comment-name">${esc(profile.name || "")} <span class="comment-org">· ${esc(profile.company || "")}, ${esc(profile.site || "")}</span></div>
+        <div class="comment-text">${esc(comment.body)}</div>
       </div>
       <div class="comment-sub">
-        <span>${loc(comment.time)}</span>
-        <button type="button" data-reply="${commentIndex}">${t("reply")}</button>
+        <span>${timeAgo(comment.created_at)}</span>
+        <button type="button" data-reply="${comment.id}">${t("reply")}</button>
       </div>
       <div class="comment-replies"></div>
     </div>
   `;
   const repliesEl = wrap.querySelector(".comment-replies");
   (comment.replies || []).forEach((r) => {
-    const [r1, r2] = gradientFor(r.name);
+    const rProfile = r.profiles || {};
+    const [r1, r2] = gradientFor(r.user_id);
     const rEl = document.createElement("div");
     rEl.className = "comment-row";
     rEl.innerHTML = `
-      <div class="comment-avatar" style="background:linear-gradient(150deg, ${r1}, ${r2})">${initials(r.name)}</div>
+      <div class="comment-avatar" style="background:linear-gradient(150deg, ${r1}, ${r2})">${esc(initials(rProfile.name))}</div>
       <div class="comment-body">
         <div class="comment-bubble">
-          <div class="comment-name">${r.name}</div>
-          <div class="comment-text">${loc(r.text)}</div>
+          <div class="comment-name">${esc(rProfile.name || "")} <span class="comment-org">· ${esc(rProfile.company || "")}, ${esc(rProfile.site || "")}</span></div>
+          <div class="comment-text">${esc(r.body)}</div>
         </div>
-        <div class="comment-sub"><span>${loc(r.time)}</span></div>
+        <div class="comment-sub"><span>${timeAgo(r.created_at)}</span></div>
       </div>
     `;
     repliesEl.appendChild(rEl);
   });
   wrap.querySelector("[data-reply]").addEventListener("click", () => {
-    replyTarget = commentIndex;
+    replyTarget = comment.id;
     $("replyChip").hidden = false;
-    $("replyChip").textContent = `↪ ${comment.name}`;
+    $("replyChip").textContent = `↪ ${profile.name || ""}`;
     $("commentInput").focus();
   });
   return wrap;
 }
 
-function submitComment() {
+async function submitComment() {
   const input = $("commentInput");
   const val = input.value.trim();
-  if (!val) return;
-  const post = feed.find((p) => p.id === activePostId);
-  if (!post) return;
-  const entry = { name: t("you"), text: { en: val, ar: val }, time: { en: t("justNow"), ar: t("justNow") } };
-  if (replyTarget !== null && post.comments[replyTarget]) {
-    if (!post.comments[replyTarget].replies) post.comments[replyTarget].replies = [];
-    post.comments[replyTarget].replies.push(entry);
-  } else {
-    entry.replies = [];
-    post.comments.push(entry);
-  }
+  if (!val || !activePostId || !currentUser) return;
   input.value = "";
+  const { error } = await supabaseClient.from("comments").insert({
+    post_id: activePostId, user_id: currentUser.id, parent_id: replyTarget, body: val,
+  });
   replyTarget = null;
   $("replyChip").hidden = true;
-  renderPostModal();
+  if (error) { showToast(error.message); return; }
+  const post = feedPosts.find((p) => p.id === activePostId);
+  if (post) post.commentCount += 1;
   renderFeed();
+  await loadAndRenderComments(activePostId);
 }
 
-/* ---------------- Post video mock playback ---------------- */
-let postPlayInterval = null;
+/* ---------------- Post video (real element, since we now have a real url) ---------------- */
 function resetPostVideo() {
-  clearInterval(postPlayInterval);
-  $("postProgressBar").style.width = "0%";
+  const area = $("postVideoArea");
+  area.querySelectorAll("video.real-player").forEach((v) => v.remove());
   $("postPlayBtn").hidden = false;
-  $("postPlayBtn").textContent = "▶";
-  $("postRecIndicator").hidden = true;
 }
 function togglePostPlay() {
-  const post = feed.find((p) => p.id === activePostId);
-  const durationSeconds = post ? parseDuration(post.duration) : 28;
-  if (postPlayInterval) {
-    clearInterval(postPlayInterval);
-    postPlayInterval = null;
-    $("postPlayBtn").hidden = false;
-    $("postRecIndicator").hidden = true;
+  const area = $("postVideoArea");
+  const url = area.dataset.url;
+  if (!url) return;
+  let video = area.querySelector("video.real-player");
+  if (video) {
+    video.paused ? video.play() : video.pause();
     return;
   }
+  video = document.createElement("video");
+  video.className = "real-player";
+  video.src = url;
+  video.controls = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;";
+  area.appendChild(video);
   $("postPlayBtn").hidden = true;
-  $("postRecIndicator").hidden = false;
-  let elapsed = 0;
-  postPlayInterval = setInterval(() => {
-    elapsed += 0.2;
-    const pct = Math.min(100, (elapsed / durationSeconds) * 100);
-    $("postProgressBar").style.width = pct + "%";
-    $("postRecTime").textContent = formatTime(Math.min(elapsed, durationSeconds));
-    if (elapsed >= durationSeconds) {
-      clearInterval(postPlayInterval);
-      postPlayInterval = null;
-      $("postPlayBtn").hidden = false;
-      $("postRecIndicator").hidden = true;
-      $("postProgressBar").style.width = "0%";
-    }
-  }, 200);
-}
-function parseDuration(str) {
-  const [m, s] = str.split(":").map(Number);
-  return m * 60 + s;
-}
-function formatTime(totalSeconds) {
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.floor(totalSeconds % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/* ---------------- Media modal (leadership / learning) ---------------- */
-let mediaPlayInterval = null;
-function openMedia({ title, meta, gradient, type }) {
+/* ============================================================
+   Media modal (leadership / learning)
+   ============================================================ */
+function openMedia({ title, meta, gradient, type, url }) {
   const [c1, c2] = gradient;
-  $("mediaVideoArea").style.background = `linear-gradient(150deg, ${c1}, ${c2})`;
+  const area = $("mediaVideoArea");
+  area.style.background = `linear-gradient(150deg, ${c1}, ${c2})`;
+  area.dataset.url = url || "";
+  area.dataset.type = type;
+  area.querySelectorAll("video.real-player").forEach((v) => v.remove());
   $("mediaModalTitle").textContent = title;
   $("mediaModalMeta").textContent = meta;
+  $("mediaPlayBtn").hidden = false;
   $("mediaPlayBtn").textContent = type === "doc" ? "📄" : "▶";
-  $("mediaProgressBar").style.width = "0%";
-  clearInterval(mediaPlayInterval);
-  mediaPlayInterval = null;
   showModal("mediaModal");
 }
-$("mediaPlayBtn") && $("mediaPlayBtn").addEventListener("click", () => {
-  if (mediaPlayInterval) {
-    clearInterval(mediaPlayInterval);
-    mediaPlayInterval = null;
-    $("mediaProgressBar").style.width = "0%";
-    return;
-  }
-  let elapsed = 0;
-  const total = 20;
-  mediaPlayInterval = setInterval(() => {
-    elapsed += 0.2;
-    const pct = Math.min(100, (elapsed / total) * 100);
-    $("mediaProgressBar").style.width = pct + "%";
-    if (elapsed >= total) {
-      clearInterval(mediaPlayInterval);
-      mediaPlayInterval = null;
-      $("mediaProgressBar").style.width = "0%";
-    }
-  }, 200);
-});
 
-/* ---------------- Record flow ---------------- */
+/* ============================================================
+   Recording, compression, upload
+   ============================================================ */
+
 function openRecord() {
-  resetRecordModal();
-  showModal("recordModal");
-}
-function resetRecordModal() {
-  clearInterval(recordTimer);
-  recordTimer = null;
-  recordSeconds = 0;
+  pendingVideoBlob = null;
   $("recordStage").hidden = false;
   $("recordPreview").hidden = true;
-  $("recIndicatorLive").hidden = true;
-  $("recordHint").hidden = false;
-  $("recLiveTime").textContent = "0:00";
-  $("startRecordBtn").textContent = t("startRecording");
-  $("startRecordBtn").onclick = startRecording;
+  $("recordProgress").hidden = true;
   $("captionInput").value = "";
+  $("recordThemeTitle").textContent = currentTheme ? loc(currentTheme, "title") : "";
+  $("recordPostingAs").textContent = currentProfile ? t("postingAs")(currentProfile.name, currentProfile.site) : "";
+  showModal("recordModal");
 }
-function startRecording() {
-  $("recordHint").hidden = true;
-  $("recIndicatorLive").hidden = false;
-  $("startRecordBtn").textContent = t("stopRecording");
-  $("startRecordBtn").onclick = stopRecording;
-  recordSeconds = 0;
-  recordTimer = setInterval(() => {
-    recordSeconds += 1;
-    $("recLiveTime").textContent = formatTime(recordSeconds);
-    if (recordSeconds >= 30) stopRecording();
-  }, 1000);
-}
-function stopRecording() {
-  clearInterval(recordTimer);
-  recordTimer = null;
+
+function onVideoFileChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  pendingVideoBlob = file;
+  const video = $("recordVideoPreview");
+  video.src = URL.createObjectURL(file);
+  video.onloadedmetadata = () => { pendingVideoDuration = video.duration || 0; };
   $("recordStage").hidden = true;
   $("recordPreview").hidden = false;
-  $("previewLen").textContent = String(recordSeconds).padStart(2, "0");
 }
-function postRecordedResponse() {
-  const site = SITES.find((s) => s.en === $("siteSelect").value) || SITES[0];
+
+function compressVideo(file, opts = {}) {
+  const { maxWidth = 480, maxHeight = 854, videoBitsPerSecond = 900000 } = opts;
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.src = URL.createObjectURL(file);
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = () => {
+      const scale = Math.min(1, maxWidth / video.videoWidth, maxHeight / video.videoHeight);
+      const width = Math.max(2, Math.round((video.videoWidth * scale) / 2) * 2);
+      const height = Math.max(2, Math.round((video.videoHeight * scale) / 2) * 2);
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+
+      if (typeof canvas.captureStream !== "function" || typeof MediaRecorder === "undefined") {
+        return reject(new Error("Compression not supported"));
+      }
+      const canvasStream = canvas.captureStream(30);
+      let audioTracks = [];
+      try {
+        const src = video.captureStream ? video.captureStream() : (video.mozCaptureStream ? video.mozCaptureStream() : null);
+        if (src) audioTracks = src.getAudioTracks();
+      } catch (e) { /* proceed video-only */ }
+
+      const combined = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+        ? "video/webm;codecs=vp9,opus"
+        : (MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : "");
+      if (!mimeType) return reject(new Error("No supported recording format"));
+
+      const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond });
+      const chunks = [];
+      recorder.ondataavailable = (ev) => { if (ev.data.size) chunks.push(ev.data); };
+      recorder.onerror = reject;
+      recorder.onstop = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(new Blob(chunks, { type: mimeType }));
+      };
+
+      let drawing = true;
+      function drawFrame() {
+        if (!drawing) return;
+        ctx.drawImage(video, 0, 0, width, height);
+        requestAnimationFrame(drawFrame);
+      }
+      video.onended = () => { drawing = false; recorder.stop(); };
+      video.onplay = () => { recorder.start(); drawFrame(); };
+      video.play().catch(reject);
+    };
+    video.onerror = () => reject(new Error("Could not read video for compression"));
+  });
+}
+
+async function postRecordedResponse() {
+  if (!pendingVideoBlob || !currentUser || !currentTheme) return;
+  $("recordPreview").hidden = true;
+  $("recordProgress").hidden = false;
+  $("recordProgressLabel").textContent = t("compressing");
+
+  let uploadBlob = pendingVideoBlob;
+  try {
+    uploadBlob = await compressVideo(pendingVideoBlob);
+  } catch (e) {
+    uploadBlob = pendingVideoBlob; // fall back to the original file
+  }
+
+  $("recordProgressLabel").textContent = t("uploading");
+  const ext = uploadBlob.type && uploadBlob.type.includes("webm") ? "webm" : "mp4";
+  const path = `${currentUser.id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabaseClient.storage.from("videos").upload(path, uploadBlob, {
+    contentType: uploadBlob.type || "video/mp4",
+  });
+  if (upErr) {
+    showToast(upErr.message);
+    closeModal("recordModal");
+    return;
+  }
+  const { data: pub } = supabaseClient.storage.from("videos").getPublicUrl(path);
   const caption = $("captionInput").value.trim();
-  const duration = formatTime(recordSeconds || 12);
-  const newPost = {
-    id: "p" + Date.now(),
-    name: t("you"),
-    nameAr: t("you"),
-    role: { en: "Frontline Supervisor", ar: "مشرف ميداني" },
-    site,
-    time: { en: t("justNow"), ar: t("justNow") },
-    duration,
-    caption: {
-      en: caption || "Responding to this quarter's theme: How I Respond Matters.",
-      ar: caption || "ردًا على موضوع هذا الربع: استجابتي تُحدث فرقًا.",
-    },
-    likes: 0,
-    comments: [],
-  };
-  feed.unshift(newPost);
+
+  const { error: insErr } = await supabaseClient.from("posts").insert({
+    user_id: currentUser.id,
+    theme_id: currentTheme.id,
+    video_url: pub.publicUrl,
+    caption: caption || null,
+    duration_seconds: Math.round(pendingVideoDuration) || null,
+  });
+  if (insErr) { showToast(insErr.message); closeModal("recordModal"); return; }
+
+  await loadFeed();
   renderFeed();
   closeModal("recordModal");
   showToast(t("postedToast"));
   $("mainScroll").scrollTo({ top: 0, behavior: "smooth" });
 }
 
-/* ---------------- Ifada ---------------- */
+/* ============================================================
+   Ifada
+   ============================================================ */
 function openIfada() { showModal("ifadaModal"); }
-function continueToIfada() {
-  showToast(t("redirectingToast"));
-  closeModal("ifadaModal");
-}
+function continueToIfada() { showToast(t("redirectingToast")); closeModal("ifadaModal"); }
 
-/* ---------------- Modal helpers ---------------- */
-function showModal(id) {
-  $(id).hidden = false;
-  document.body.classList.add("modal-open");
-}
+/* ============================================================
+   Modal helpers / toast
+   ============================================================ */
+function showModal(id) { $(id).hidden = false; document.body.classList.add("modal-open"); }
 function closeModal(id) {
   $(id).hidden = true;
   if (![...document.querySelectorAll(".modal-overlay")].some((m) => !m.hidden)) {
     document.body.classList.remove("modal-open");
   }
-  if (id === "postModal") {
-    clearInterval(postPlayInterval);
-    postPlayInterval = null;
-    activePostId = null;
-  }
-  if (id === "mediaModal") {
-    clearInterval(mediaPlayInterval);
-    mediaPlayInterval = null;
-  }
-  if (id === "recordModal") {
-    clearInterval(recordTimer);
-    recordTimer = null;
-  }
+  if (id === "postModal") activePostId = null;
 }
-
 let toastTimer = null;
 function showToast(msg) {
   const el = $("toast");
-  el.textContent = msg;
-  el.hidden = false;
+  el.textContent = msg; el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, 2400);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 2600);
 }
 
-/* ---------------- Language switching ---------------- */
-function setLang(newLang) {
-  lang = newLang;
-  localStorage.setItem("majlisLang", lang);
-  applyChrome();
-  renderLeadership();
-  renderLearning();
-  renderFeed();
-  if (activePostId) renderPostModal();
+/* ============================================================
+   ADMIN PANEL
+   ============================================================ */
+
+function applyAdminChrome() {
+  $("adminTitle").textContent = t("adminTitle");
+  $("adminTabCodes").textContent = t("adminTabCodes");
+  $("adminTabTheme").textContent = t("adminTabTheme");
+  $("adminTabLeadership").textContent = t("adminTabLeadership");
+  $("adminTabMaterials").textContent = t("adminTabMaterials");
+  $("adminTabPosts").textContent = t("adminTabPosts");
+  $("codeCompany").placeholder = t("codeCompanyPh");
+  $("codeSite").placeholder = t("codeSitePh");
+  $("codeRoleMemberOpt").textContent = t("codeRoleMember");
+  $("codeRoleAdminOpt").textContent = t("codeRoleAdmin");
+  $("createCodeBtn").textContent = t("createCodeBtn");
+  $("themeQuarterLabel").placeholder = t("themeQuarterPh");
+  $("themeTitleEn").placeholder = t("themeTitleEnPh");
+  $("themeTitleAr").placeholder = t("themeTitleArPh");
+  $("themePromptEn").placeholder = t("themePromptEnPh");
+  $("themePromptAr").placeholder = t("themePromptArPh");
+  $("createThemeBtn").textContent = t("createThemeBtn");
+  $("leaderName").placeholder = t("leaderNamePh");
+  $("leaderTitleEn").placeholder = t("leaderTitleEnPh");
+  $("leaderTitleAr").placeholder = t("leaderTitleArPh");
+  $("leaderCaptionEn").placeholder = t("leaderCaptionEnPh");
+  $("leaderCaptionAr").placeholder = t("leaderCaptionArPh");
+  $("saveLeadershipBtn").textContent = t("saveLeadershipBtn");
+  $("materialTypeVideoOpt").textContent = t("materialTypeVideo");
+  $("materialTypeDocOpt").textContent = t("materialTypeDoc");
+  $("materialTitleEn").placeholder = t("materialTitleEnPh");
+  $("materialTitleAr").placeholder = t("materialTitleArPh");
+  $("materialMeta").placeholder = t("materialMetaPh");
+  $("addMaterialBtn").textContent = t("addMaterialBtn");
 }
 
-/* ---------------- Wire up events ---------------- */
+function openAdmin() {
+  showModal("adminModal");
+  switchAdminTab("codes");
+  refreshAdminCodes();
+  refreshAdminThemes();
+  if (leadershipMsg) {
+    $("leaderName").value = leadershipMsg.name || "";
+    $("leaderTitleEn").value = leadershipMsg.title_en || "";
+    $("leaderTitleAr").value = leadershipMsg.title_ar || "";
+    $("leaderCaptionEn").value = leadershipMsg.caption_en || "";
+    $("leaderCaptionAr").value = leadershipMsg.caption_ar || "";
+  }
+  refreshAdminMaterials();
+  refreshAdminPosts();
+}
+
+function switchAdminTab(tab) {
+  document.querySelectorAll(".admin-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".admin-panel").forEach((p) => { p.hidden = p.id !== `adminPanel${tab[0].toUpperCase()}${tab.slice(1)}`; });
+}
+
+async function refreshAdminCodes() {
+  const { data } = await supabaseClient.from("invite_codes").select("*").order("created_at", { ascending: false });
+  const list = $("inviteCodeList");
+  list.innerHTML = "";
+  (data || []).forEach((code) => {
+    const row = document.createElement("div");
+    row.className = "admin-list-item";
+    row.innerHTML = `
+      <div class="admin-list-main">
+        <div class="admin-list-title">${esc(code.code)} <span class="admin-badge ${code.is_active ? "on" : "off"}">${code.is_active ? "●" : "✕"}</span></div>
+        <div class="admin-list-sub">${esc(code.company)} · ${esc(code.site)} · ${code.role} · ${t("usesLabel")(code.use_count, code.max_uses)}</div>
+      </div>
+      <button class="btn btn-secondary" type="button">${code.is_active ? t("deactivate") : t("activate")}</button>
+    `;
+    row.querySelector("button").addEventListener("click", async () => {
+      await supabaseClient.from("invite_codes").update({ is_active: !code.is_active }).eq("id", code.id);
+      refreshAdminCodes();
+    });
+    list.appendChild(row);
+  });
+}
+
+async function refreshAdminThemes() {
+  const { data } = await supabaseClient.from("themes").select("*").order("created_at", { ascending: false });
+  const list = $("themeList");
+  list.innerHTML = "";
+  (data || []).forEach((th) => {
+    const row = document.createElement("div");
+    row.className = "admin-list-item";
+    row.innerHTML = `
+      <div class="admin-list-main">
+        <div class="admin-list-title">${esc(th.quarter_label)} ${th.is_current ? `<span class="admin-badge on">${t("current")}</span>` : ""}</div>
+        <div class="admin-list-sub">${esc(th.title_en)}</div>
+      </div>
+      ${th.is_current ? "" : `<button class="btn btn-secondary" type="button">${t("setCurrent")}</button>`}
+    `;
+    const btn = row.querySelector("button");
+    if (btn) btn.addEventListener("click", async () => {
+      await supabaseClient.from("themes").update({ is_current: false }).eq("is_current", true);
+      await supabaseClient.from("themes").update({ is_current: true }).eq("id", th.id);
+      await loadTheme();
+      applyChrome();
+      refreshAdminThemes();
+    });
+    list.appendChild(row);
+  });
+}
+
+async function refreshAdminMaterials() {
+  const { data } = await supabaseClient.from("learning_materials").select("*").order("sort_order", { ascending: true });
+  const list = $("materialList");
+  list.innerHTML = "";
+  (data || []).forEach((m) => {
+    const row = document.createElement("div");
+    row.className = "admin-list-item";
+    row.innerHTML = `
+      <div class="admin-list-main">
+        <div class="admin-list-title">${esc(m.title_en)}</div>
+        <div class="admin-list-sub">${m.type} · ${esc(m.meta || "")}</div>
+      </div>
+      <button class="btn btn-secondary" type="button">${t("delete")}</button>
+    `;
+    row.querySelector("button").addEventListener("click", async () => {
+      await supabaseClient.from("learning_materials").delete().eq("id", m.id);
+      await loadLearningMaterials();
+      renderLearning();
+      refreshAdminMaterials();
+    });
+    list.appendChild(row);
+  });
+}
+
+async function refreshAdminPosts() {
+  const { data } = await supabaseClient
+    .from("posts").select("*, profiles(name, company, site)")
+    .order("created_at", { ascending: false });
+  const list = $("adminPostList");
+  list.innerHTML = "";
+  (data || []).forEach((p) => {
+    const profile = p.profiles || {};
+    const row = document.createElement("div");
+    row.className = "admin-list-item";
+    row.innerHTML = `
+      <div class="admin-list-main">
+        <div class="admin-list-title">${esc(profile.name || "")} ${p.is_hidden ? `<span class="admin-badge off">${t("hide")}</span>` : ""}</div>
+        <div class="admin-list-sub">${esc(profile.company || "")} · ${esc(profile.site || "")} · ${esc((p.caption || "").slice(0, 60))}</div>
+      </div>
+      <button class="btn btn-secondary" type="button">${p.is_hidden ? t("unhide") : t("hide")}</button>
+    `;
+    row.querySelector("button").addEventListener("click", async () => {
+      await supabaseClient.from("posts").update({ is_hidden: !p.is_hidden }).eq("id", p.id);
+      await loadFeed();
+      renderFeed();
+      refreshAdminPosts();
+    });
+    list.appendChild(row);
+  });
+}
+
+async function uploadToMaterials(file, prefix) {
+  const path = `${prefix}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
+  const { error } = await supabaseClient.storage.from("materials").upload(path, file, { contentType: file.type });
+  if (error) throw error;
+  const { data } = supabaseClient.storage.from("materials").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/* ============================================================
+   Wire up events
+   ============================================================ */
 function init() {
   applyChrome();
-  renderLeadership();
-  renderLearning();
-  renderFeed();
 
-  $("langToggle").addEventListener("click", () => setLang(lang === "en" ? "ar" : "en"));
+  $("langToggle").addEventListener("click", () => {
+    lang = lang === "en" ? "ar" : "en";
+    try { localStorage.setItem("majlisLang", lang); } catch (e) {}
+    applyChrome();
+    if (currentProfile) { renderLeadership(); renderLearning(); renderFeed(); if (activePostId) renderPostModal(); }
+  });
+
+  $("authRequestBtn").addEventListener("click", handleAuthRequest);
+  $("authVerifyBtn").addEventListener("click", handleAuthVerify);
+  $("authBackBtn").addEventListener("click", () => {
+    $("authStepVerify").hidden = true;
+    $("authStepRequest").hidden = false;
+  });
+  $("signOutBtn").addEventListener("click", signOut);
+
   $("recordBtn").addEventListener("click", openRecord);
   $("recordModalClose").addEventListener("click", () => closeModal("recordModal"));
-  $("retakeBtn").addEventListener("click", resetRecordModal);
+  $("startRecordBtn").addEventListener("click", () => $("videoFileInput").click());
+  $("videoFileInput").addEventListener("change", onVideoFileChosen);
+  $("retakeBtn").addEventListener("click", () => $("videoFileInput").click());
   $("postRecordBtn").addEventListener("click", postRecordedResponse);
 
   $("postModalClose").addEventListener("click", () => closeModal("postModal"));
@@ -821,21 +1100,120 @@ function init() {
   $("commentInput").addEventListener("keydown", (e) => { if (e.key === "Enter") submitComment(); });
 
   $("mediaModalClose").addEventListener("click", () => closeModal("mediaModal"));
+  $("mediaPlayBtn").addEventListener("click", () => {
+    const area = $("mediaVideoArea");
+    if (area.dataset.type === "doc") { window.open(area.dataset.url, "_blank", "noopener"); return; }
+    let video = area.querySelector("video.real-player");
+    if (video) { video.paused ? video.play() : video.pause(); return; }
+    video = document.createElement("video");
+    video.className = "real-player";
+    video.src = area.dataset.url;
+    video.controls = true; video.autoplay = true; video.playsInline = true;
+    video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;";
+    area.appendChild(video);
+    $("mediaPlayBtn").hidden = true;
+  });
 
   $("ifadaBtn").addEventListener("click", openIfada);
   $("ifadaModalClose").addEventListener("click", () => closeModal("ifadaModal"));
   $("ifadaContinueBtn").addEventListener("click", continueToIfada);
 
-  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeModal(overlay.id);
+  $("adminNavBtn").addEventListener("click", openAdmin);
+  $("adminModalClose").addEventListener("click", () => closeModal("adminModal"));
+  $("adminTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".admin-tab");
+    if (btn) switchAdminTab(btn.dataset.tab);
+  });
+
+  $("inviteCodeForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await supabaseClient.rpc("create_invite_code", {
+      p_company: $("codeCompany").value.trim(),
+      p_site: $("codeSite").value.trim(),
+      p_role: $("codeRole").value,
+      p_max_uses: parseInt($("codeMaxUses").value, 10) || 1,
     });
+    e.target.reset();
+    refreshAdminCodes();
+  });
+
+  $("themeForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const { data: newTheme, error } = await supabaseClient.from("themes").insert({
+      quarter_label: $("themeQuarterLabel").value.trim(),
+      title_en: $("themeTitleEn").value.trim(),
+      title_ar: $("themeTitleAr").value.trim(),
+      prompt_en: $("themePromptEn").value.trim(),
+      prompt_ar: $("themePromptAr").value.trim(),
+      is_current: false,
+    }).select().single();
+    if (!error && newTheme) {
+      await supabaseClient.from("themes").update({ is_current: false }).eq("is_current", true);
+      await supabaseClient.from("themes").update({ is_current: true }).eq("id", newTheme.id);
+      await loadTheme();
+      applyChrome();
+    }
+    e.target.reset();
+    refreshAdminThemes();
+    showToast(t("savedToast"));
+  });
+
+  $("leadershipForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const file = $("leaderVideoFile").files[0];
+    let videoUrl = leadershipMsg ? leadershipMsg.video_url : null;
+    if (file) {
+      try { videoUrl = await uploadToMaterials(file, "leadership"); }
+      catch (err) { showToast(err.message); return; }
+    }
+    if (!videoUrl) { showToast("Please attach a video"); return; }
+    await supabaseClient.from("leadership_message").update({ is_current: false }).eq("is_current", true);
+    await supabaseClient.from("leadership_message").insert({
+      name: $("leaderName").value.trim(),
+      title_en: $("leaderTitleEn").value.trim(),
+      title_ar: $("leaderTitleAr").value.trim(),
+      caption_en: $("leaderCaptionEn").value.trim(),
+      caption_ar: $("leaderCaptionAr").value.trim(),
+      video_url: videoUrl,
+      is_current: true,
+    });
+    await loadLeadership();
+    renderLeadership();
+    showToast(t("savedToast"));
+  });
+
+  $("materialForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const file = $("materialFile").files[0];
+    if (!file) return;
+    let url;
+    try { url = await uploadToMaterials(file, "learning"); }
+    catch (err) { showToast(err.message); return; }
+    await supabaseClient.from("learning_materials").insert({
+      type: $("materialType").value,
+      title_en: $("materialTitleEn").value.trim(),
+      title_ar: $("materialTitleAr").value.trim(),
+      file_url: url,
+      meta: $("materialMeta").value.trim() || null,
+      sort_order: learningMaterials.length,
+    });
+    e.target.reset();
+    await loadLearningMaterials();
+    renderLearning();
+    refreshAdminMaterials();
+    showToast(t("savedToast"));
+  });
+
+  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeModal(overlay.id); });
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       document.querySelectorAll(".modal-overlay").forEach((m) => { if (!m.hidden) closeModal(m.id); });
     }
   });
+
+  initAuth();
 }
 
 document.addEventListener("DOMContentLoaded", init);
