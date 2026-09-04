@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Majlis FLS</title>
+<meta name="description" content="Majlis FLS — a safety engagement platform for frontline supervisors">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">🛡️</span>
+      <span class="brand-name">Majlis FLS</span>
+    </div>
+    <button id="langToggle" class="lang-toggle" type="button">العربية</button>
+  </header>
+
+  <main class="feed-scroll" id="mainScroll">
+
+    <!-- 1. Theme banner -->
+    <section class="theme-banner">
+      <span class="theme-badge" id="themeBadge"></span>
+      <h1 class="theme-title" id="themeTitle"></h1>
+      <p class="theme-prompt" id="themePrompt"></p>
+      <button class="btn btn-record" id="recordBtn" type="button">
+        <span class="icon" aria-hidden="true">🎥</span>
+        <span id="recordBtnLabel"></span>
+      </button>
+    </section>
+
+    <!-- 2. Message from leadership -->
+    <section class="section">
+      <h2 class="section-heading" id="leadershipHeading"></h2>
+      <div id="leadershipCard"></div>
+    </section>
+
+    <!-- 3. Learning from incidents -->
+    <section class="section">
+      <h2 class="section-heading" id="learningHeading"></h2>
+      <div class="learning-row" id="learningRow"></div>
+    </section>
+
+    <!-- 4. The feed -->
+    <section class="section feed-section">
+      <h2 class="section-heading" id="feedHeading"></h2>
+      <div class="feed-list" id="feedList"></div>
+    </section>
+
+    <div class="feed-end-spacer"></div>
+  </main>
+
+  <!-- Ifada CTA -->
+  <div class="ifada-bar">
+    <button class="ifada-btn" id="ifadaBtn" type="button">
+      <span class="icon" aria-hidden="true">⚠️</span>
+      <span class="ifada-text">
+        <strong id="ifadaBtnLabel"></strong>
+        <small id="ifadaSubLabel"></small>
+      </span>
+      <span class="chev" aria-hidden="true">›</span>
+    </button>
+  </div>
+</div>
+
+<!-- Post viewer modal -->
+<div class="modal-overlay" id="postModal" hidden>
+  <div class="modal post-modal">
+    <button class="modal-close" id="postModalClose" type="button" aria-label="Close">✕</button>
+    <div class="post-video" id="postVideoArea">
+      <div class="video-progress"><div class="video-progress-bar" id="postProgressBar"></div></div>
+      <button class="play-btn" id="postPlayBtn" type="button" aria-label="Play">▶</button>
+      <div class="rec-indicator" id="postRecIndicator" hidden><span class="rec-dot"></span><span id="postRecTime">0:00</span></div>
+    </div>
+    <div class="post-modal-body">
+      <div class="post-modal-header">
+        <div class="avatar" id="postModalAvatar"></div>
+        <div class="post-modal-who">
+          <div class="post-modal-name" id="postModalName"></div>
+          <div class="post-modal-site" id="postModalSite"></div>
+        </div>
+        <button class="like-btn" id="postModalLike" type="button">
+          <span class="heart" id="postModalHeart">♡</span>
+          <span id="postModalLikeCount">0</span>
+        </button>
+      </div>
+      <p class="post-modal-caption" id="postModalCaption"></p>
+      <div class="comments-list" id="postModalComments"></div>
+    </div>
+    <div class="comment-composer">
+      <span class="reply-chip" id="replyChip" hidden></span>
+      <input type="text" id="commentInput" class="comment-input" autocomplete="off">
+      <button class="send-btn" id="commentSend" type="button"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Media viewer modal (leadership / learning) -->
+<div class="modal-overlay" id="mediaModal" hidden>
+  <div class="modal media-modal">
+    <button class="modal-close" id="mediaModalClose" type="button" aria-label="Close">✕</button>
+    <div class="post-video" id="mediaVideoArea">
+      <div class="video-progress"><div class="video-progress-bar" id="mediaProgressBar"></div></div>
+      <button class="play-btn" id="mediaPlayBtn" type="button" aria-label="Play">▶</button>
+    </div>
+    <div class="media-modal-body">
+      <div class="media-modal-title" id="mediaModalTitle"></div>
+      <div class="media-modal-meta" id="mediaModalMeta"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Record modal -->
+<div class="modal-overlay" id="recordModal" hidden>
+  <div class="modal record-modal">
+    <button class="modal-close" id="recordModalClose" type="button" aria-label="Close">✕</button>
+    <div class="record-header">
+      <span id="respondingToLabel"></span>
+      <strong id="recordThemeTitle"></strong>
+    </div>
+
+    <div class="record-stage" id="recordStage">
+      <div class="record-camera" id="recordCamera">
+        <div class="rec-indicator" id="recIndicatorLive" hidden><span class="rec-dot"></span><span id="recLiveTime">0:00</span></div>
+        <div class="record-hint" id="recordHint"></div>
+      </div>
+      <button class="btn btn-record wide" id="startRecordBtn" type="button"></button>
+    </div>
+
+    <div class="record-preview" id="recordPreview" hidden>
+      <div class="record-camera done">
+        <div class="preview-badge">✓ 0:0<span id="previewLen">0</span></div>
+      </div>
+      <label class="field-label" id="siteLabel"></label>
+      <select id="siteSelect" class="field-select"></select>
+      <label class="field-label" id="captionLabel"></label>
+      <textarea id="captionInput" class="field-textarea" rows="2"></textarea>
+      <div class="record-actions">
+        <button class="btn btn-secondary" id="retakeBtn" type="button"></button>
+        <button class="btn btn-primary" id="postRecordBtn" type="button"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ifada modal -->
+<div class="modal-overlay" id="ifadaModal" hidden>
+  <div class="modal ifada-modal">
+    <button class="modal-close" id="ifadaModalClose" type="button" aria-label="Close">✕</button>
+    <div class="ifada-modal-icon">⚠️</div>
+    <h3 id="ifadaModalTitle"></h3>
+    <p id="ifadaModalBody"></p>
+    <button class="btn btn-danger wide" id="ifadaContinueBtn" type="button"></button>
+    <div class="demo-notice" id="ifadaDemoNotice"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
