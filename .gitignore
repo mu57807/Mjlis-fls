@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+.env
+
+# Ingested/generated data (rebuildable via admin re-index)
+data/*.sqlite3
+data/chroma/
+!data/.gitkeep
+
+# Source material the user places locally (IOGP PDFs, cached external downloads)
+sources/iogp/*
+!sources/iogp/.gitkeep
+sources/external/*
+!sources/external/.gitkeep
+
+# Logs
+*.log
+logs/
+
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

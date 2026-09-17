@@ -1,0 +1,8 @@
+# Step 1: project skeleton, config, connector interface
+pydantic>=2.7
+pydantic-settings>=2.3
+python-dotenv>=1.0
+pytest>=8.0
+
+# Later steps will add: pypdf/pymupdf, watchdog, chromadb, sentence-transformers,
+# anthropic, fastapi, uvicorn, httpx, apscheduler, etc. as each phase needs them.
