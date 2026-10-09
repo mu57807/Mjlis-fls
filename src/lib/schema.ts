@@ -98,6 +98,12 @@ export interface Project {
   /** Voiceover clips per scene id, if generated. */
   audio: AudioManifest | null;
   render: RenderInfo;
+  /** Where the incident came from. */
+  origin: "web" | "api" | "whatsapp";
+  /** WhatsApp number (for origin "whatsapp"). */
+  originContact: string | null;
+  /** URL notified when the video is ready (for origin "api"). */
+  callbackUrl: string | null;
 }
 
 export interface RenderInfo {

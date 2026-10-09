@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { CreateRequestSchema } from "@/lib/schema";
-import { createProject } from "@/lib/db";
-import { StructuringError, structureIncident } from "@/lib/claude/structure";
-import type { Language } from "@/lib/catalog";
+import { StructuringError } from "@/lib/claude/structure";
+import { createFromIncident } from "@/lib/pipeline";
 
 // POST /api/storyboard
 // Body: { description, outputLanguage: "en"|"ar"|"both", aspectRatio, targetSeconds }
@@ -16,17 +14,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { description, outputLanguage, aspectRatio, targetSeconds } = parsed.data;
-  const languages: Language[] = outputLanguage === "both" ? ["en", "ar"] : [outputLanguage];
-
   try {
-    const results = await Promise.all(
-      languages.map((language) => structureIncident({ description, language, targetSeconds })),
-    );
-    const batchId = randomUUID();
-    const projects = results.map(({ storyboard, demo }) =>
-      createProject({ batchId, aspectRatio, targetSeconds, sourceText: description, storyboard, demo }),
-    );
+    const projects = await createFromIncident({ ...parsed.data, origin: "web" });
     return Response.json({ projectIds: projects.map((p) => p.id) });
   } catch (err) {
     if (err instanceof StructuringError) {

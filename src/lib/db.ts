@@ -48,6 +48,11 @@ const MIGRATIONS: string[] = [
    ALTER TABLE projects ADD COLUMN thumb_file TEXT;
    ALTER TABLE projects ADD COLUMN video_seconds REAL;
    ALTER TABLE projects ADD COLUMN rendered_at TEXT;`,
+  `ALTER TABLE projects ADD COLUMN origin TEXT NOT NULL DEFAULT 'web';
+   ALTER TABLE projects ADD COLUMN origin_contact TEXT;
+   ALTER TABLE projects ADD COLUMN callback_url TEXT;
+   CREATE INDEX projects_contact ON projects(origin_contact, created_at DESC);
+   CREATE TABLE inbound_messages (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);`,
 ];
 
 function migrate(conn: Database.Database) {
@@ -83,6 +88,9 @@ interface ProjectRow {
   thumb_file: string | null;
   video_seconds: number | null;
   rendered_at: string | null;
+  origin: Project["origin"];
+  origin_contact: string | null;
+  callback_url: string | null;
 }
 
 function toProject(r: ProjectRow): Project {
@@ -99,6 +107,9 @@ function toProject(r: ProjectRow): Project {
     storyboard: JSON.parse(r.storyboard) as Storyboard,
     approvedAt: r.approved_at,
     demo: r.demo === 1,
+    origin: r.origin,
+    originContact: r.origin_contact,
+    callbackUrl: r.callback_url,
     audio: r.audio_manifest ? (JSON.parse(r.audio_manifest) as AudioManifest) : null,
     render: {
       stage: r.render_stage,
@@ -120,14 +131,18 @@ export function createProject(input: {
   sourceText: string;
   storyboard: Storyboard;
   demo: boolean;
+  origin?: Project["origin"];
+  originContact?: string | null;
+  callbackUrl?: string | null;
 }): Project {
   const now = new Date().toISOString();
   const id = randomUUID();
   db()
     .prepare(
       `INSERT INTO projects (id, batch_id, created_at, updated_at, status, language,
-         aspect_ratio, target_seconds, source_text, storyboard, approved_at, demo)
-       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, NULL, ?)`,
+         aspect_ratio, target_seconds, source_text, storyboard, approved_at, demo,
+         origin, origin_contact, callback_url)
+       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -140,6 +155,9 @@ export function createProject(input: {
       input.sourceText,
       JSON.stringify(input.storyboard),
       input.demo ? 1 : 0,
+      input.origin ?? "web",
+      input.originContact ?? null,
+      input.callbackUrl ?? null,
     );
   return getProject(id)!;
 }
@@ -182,6 +200,9 @@ export function listProjects(): ProjectSummary[] {
       approvedAt: p.approvedAt,
       demo: p.demo,
       render: p.render,
+      origin: p.origin,
+      originContact: p.originContact,
+      callbackUrl: p.callbackUrl,
       title: p.storyboard.title,
       sceneCount: p.storyboard.scenes.length,
     };
@@ -282,4 +303,27 @@ export function failRender(id: string, error: string) {
        WHERE id = ? AND status = 'rendering'`,
     )
     .run(error.slice(0, 2000), id);
+}
+
+// ---------------------------------------------------------------------------
+// Messaging channels
+// ---------------------------------------------------------------------------
+
+/** Most recent projects started from one WhatsApp number. */
+export function projectsForContact(contact: string, limit = 5): Project[] {
+  const rows = db()
+    .prepare(`SELECT * FROM projects WHERE origin_contact = ? ORDER BY created_at DESC LIMIT ?`)
+    .all(contact, limit) as ProjectRow[];
+  return rows.map(toProject);
+}
+
+/**
+ * Remember an incoming message id. Returns false if it was seen before
+ * (WhatsApp re-sends a message when it is unsure it was delivered).
+ */
+export function markMessageSeen(messageId: string): boolean {
+  const res = db()
+    .prepare(`INSERT OR IGNORE INTO inbound_messages (id, received_at) VALUES (?, ?)`)
+    .run(messageId, new Date().toISOString());
+  return res.changes > 0;
 }

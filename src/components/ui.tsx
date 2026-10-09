@@ -88,3 +88,13 @@ export function StatusPill({ status }: { status: string }) {
 }
 
 export const LANGUAGE_LABEL: Record<string, string> = { en: "English", ar: "العربية" };
+
+export function OriginBadge({ origin, contact }: { origin: string; contact?: string | null }) {
+  if (origin === "web") return null;
+  const label = origin === "whatsapp" ? `WhatsApp${contact ? ` +${contact}` : ""}` : "API";
+  return (
+    <span className="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+      {label}
+    </span>
+  );
+}

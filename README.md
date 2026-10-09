@@ -14,6 +14,7 @@ you download the MP4, a thumbnail and an `.srt` subtitle file.
 | 2 | Animated video templates (Remotion) with live preview | ✅ |
 | 3 | Voiceover (ElevenLabs or Azure) with subtitles synced to the voice | ✅ |
 | 4 | MP4 render in the background, thumbnail, downloads | ✅ |
+| 5 | WhatsApp bot, API for other systems, web login | ✅ |
 
 ---
 
@@ -71,6 +72,91 @@ npm run render:sample -- ar 9:16        # Arabic, vertical
 
 ---
 
+## Using it from WhatsApp
+
+Staff send the incident to your company's WhatsApp number:
+
+1. **They send** the incident description as a text message (Arabic or English).
+2. **The bot replies** with the storyboard: every scene, any missing information, and a warning if a
+   name or ID number may still be in the text. It adds **✅ Approve** and **❌ Cancel** buttons.
+3. **They tap Approve.** Nothing is rendered before this, and only the person who sent the incident can
+   approve it.
+4. **The bot sends the video** in the chat (usually 2–4 minutes), with a download link valid for 7 days.
+
+Options they can add to the message: `#ar` / `#en` (video language; default is the language of the
+message), `#both` (two videos), `#wide` (16:9; default is 9:16 for phones), `#90` (90 seconds).
+They can also send `status` / `الحالة` (their recent videos) and `help` / `مساعدة`.
+
+WhatsApp incidents also appear in the web app's **History**, marked with a green WhatsApp badge,
+so the HSE team can edit or re-render them there.
+
+### Setting up WhatsApp (one time, about 30 minutes)
+
+You need a Meta (Facebook) business account. The test setup is free.
+
+1. **Make the app reachable from the internet.** Meta must be able to reach it.
+   - *For testing on your computer:* install **cloudflared**
+     (<https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/>), then
+     run `cloudflared tunnel --url http://localhost:3000`. It prints an address like
+     `https://something.trycloudflare.com`. This address changes every time you restart it.
+   - *For real use:* your company server's address (ask IT).
+2. In `.env.local`, set:
+   - `APP_BASE_URL` = that address
+   - `LFI_ADMIN_PASSWORD` = a strong password (**required** once the app can be reached from outside)
+3. Go to <https://developers.facebook.com> → **My Apps → Create app**. Choose the WhatsApp / "Business" option.
+4. In the app, open **WhatsApp → API Setup**:
+   - Copy the **Phone number ID** → `WHATSAPP_PHONE_NUMBER_ID`.
+   - Copy the **temporary access token** → `WHATSAPP_TOKEN`. It lasts 24 hours; see step 8 for a permanent one.
+   - Under "To", add and verify your own mobile number. The free test number can only message
+     numbers you add here.
+5. **App settings → Basic** → copy the **App secret** → `WHATSAPP_APP_SECRET`.
+6. Choose any secret word → `WHATSAPP_VERIFY_TOKEN`. Then put the numbers allowed to use the bot in
+   `WHATSAPP_ALLOWED_NUMBERS` (e.g. `+971501234567, +971509876543`). Restart the app.
+7. **WhatsApp → Configuration → Webhook → Edit**:
+   - Callback URL: `<APP_BASE_URL>/api/whatsapp/webhook`
+   - Verify token: the same word as `WHATSAPP_VERIFY_TOKEN`
+   - Click **Verify and save**, then under **Webhook fields** subscribe to **messages**.
+8. Send "help" from your phone to the test number. You should get the instructions back.
+9. For everyday use: in Meta Business Settings, create a **System user** and generate a **permanent
+   token** with `whatsapp_business_messaging` and `whatsapp_business_management`. Then add your company's
+   real WhatsApp number and complete business verification.
+
+Notes:
+- WhatsApp accepts videos up to 16 MB. Our videos are about 5–7 MB. If a video is too large, the bot
+  sends a download link instead.
+- If the bot doesn't answer, look at the terminal where the app runs, and check that the number is in
+  `WHATSAPP_ALLOWED_NUMBERS`.
+
+## API for other systems
+
+If you already have a WhatsApp agent (or any other system), it can use the API instead of the
+built-in bot. Set `LFI_API_KEYS` to one or more long secret keys, and send them as
+`Authorization: Bearer <key>`.
+
+| Call | What it does |
+|---|---|
+| `POST /api/v1/lfi` | Submit an incident: `{ "description": "...", "outputLanguage": "auto"\|"en"\|"ar"\|"both", "aspectRatio": "9:16"\|"16:9", "targetSeconds": 60\|90, "callbackUrl": "https://..." }`. Returns the draft storyboard(s): scenes, missing information, possible names/IDs, review link. |
+| `POST /api/v1/lfi/{id}/approve` | Call this **after a person has approved** the storyboard. Starts the video. |
+| `GET /api/v1/lfi/{id}` | Status, progress and, when finished, `videoUrl` and `thumbnailUrl` (links valid 7 days). |
+
+When the video is ready (or failed), `callbackUrl` receives a POST with
+`{ "event": "video.ready" | "video.failed", "project": { ... } }`. If `LFI_CALLBACK_SECRET` is set,
+the header `X-LFI-Signature: sha256=<HMAC of the body>` proves the call came from this app.
+
+## Logging in
+
+- **No password set:** the app only opens on the computer it runs on (<http://localhost:3000>).
+- **`LFI_ADMIN_PASSWORD` set:** anyone with the password can open it from any device, including
+  phones on the same Wi-Fi (see "Using it from your phone" below). Everyone shares one password for now;
+  company single sign-on can be added later.
+
+## Using it from your phone
+
+1. Set `LFI_ADMIN_PASSWORD` in `.env.local`.
+2. Run `npm run build` and then `npm start -- -H 0.0.0.0`.
+3. On your phone (same Wi-Fi), open `http://<your computer's IP address>:3000` and log in.
+   On Windows, run `ipconfig` to find the IP address; on a Mac, look in System Settings → Wi-Fi → Details.
+
 ## How the video is made
 
 - **Templates** (in `src/remotion/scenes/`): title card, what happened (with an animated main icon;
@@ -118,6 +204,9 @@ src/lib/                     the "engine", reusable by a future WhatsApp API
   claude/                      Claude instructions + call (anonymise, don't invent facts)
   tts/                         voice services (elevenlabs.ts, azure.ts; add more here)
   render/                      video rendering
+  whatsapp/                    WhatsApp bot (client.ts, bot.ts, messages.ts = what the bot says)
+  pipeline.ts                  shared steps: incident → storyboard, approve → render
+  notify.ts                    sends the finished video to WhatsApp / API callbacks
   video.ts                     scene and subtitle timing
   anonymise.ts                 local double-check for names and IDs
 src/remotion/                video templates
@@ -133,6 +222,8 @@ Dockerfile                   for running on a company server
 2. **Data leaving the building.** The original incident text goes to Claude (Anthropic), and the
    anonymised narration goes to ElevenLabs or Azure. Check this with your data-protection team. Azure can
    run inside your company's own Azure tenant.
+   With WhatsApp, the incident text and the finished video also pass through Meta's WhatsApp Cloud API,
+   which Meta hosts.
 3. **The original text** is stored in the local database so reviewers can compare against it. It is never
    put in a video.
 
@@ -145,10 +236,11 @@ docker build -t lfi-video-studio .
 docker run -p 3000:3000 --env-file .env.local -v lfi-data:/app/data lfi-video-studio
 ```
 
-The app has no login yet. Before making it reachable beyond your own computer, put it behind your
-company's single sign-on or VPN.
+Set `LFI_ADMIN_PASSWORD` and `APP_BASE_URL`, and serve it over HTTPS (IT can put it behind the
+company's reverse proxy). Keep the `data` volume backed up: it holds the database and the videos.
 
 ## Planned next
 
-- An API endpoint for a WhatsApp agent to submit an LFI and receive the video link.
+- Company single sign-on instead of one shared password.
+- Voice notes on WhatsApp (transcribe the spoken incident).
 - An optional AI-generated video clip for the "incident scene" (the data model already reserves a slot for it).

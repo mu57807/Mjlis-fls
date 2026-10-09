@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Film, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/lib/schema";
-import { LANGUAGE_LABEL, Panel, StatusPill } from "./ui";
+import { LANGUAGE_LABEL, OriginBadge, Panel, StatusPill } from "./ui";
 
 export function HistoryList() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
@@ -70,6 +70,7 @@ export function HistoryList() {
                 {p.aspectRatio} · {p.targetSeconds}s · {p.sceneCount} scenes{p.demo ? " · demo" : ""}
               </div>
             </div>
+            <OriginBadge origin={p.origin} />
             <StatusPill status={p.status} />
             {p.status === "done" && (
               <a

@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import Link from "next/link";
+import { connection } from "next/server";
 import { brand } from "@brand";
+import { passwordConfigured } from "@/lib/auth";
+import { LogoutButton } from "@/components/LogoutButton";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
@@ -30,7 +33,9 @@ const brandVars = {
   "--brand-font-arabic": `"${brand.fonts.arabic}"`,
 } as CSSProperties;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Settings are read when the page is requested, not when the app is built.
+  await connection();
   return (
     <html lang="en" style={brandVars} className="h-full antialiased">
       <body className="min-h-full flex flex-col">
@@ -48,6 +53,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/history" className="rounded px-3 py-1.5 hover:bg-white/10">
                 History
               </Link>
+              {passwordConfigured() && <LogoutButton />}
             </nav>
           </div>
         </header>

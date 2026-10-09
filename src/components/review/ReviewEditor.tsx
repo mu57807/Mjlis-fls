@@ -6,7 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, Clapperboard, Plus, Save, Wand2 } from "lucide-react";
 import type { Project, Scene, Storyboard } from "@/lib/schema";
 import { checkStoryboard, fitDurations } from "@/lib/storyboard-checks";
-import { Choice, LANGUAGE_LABEL, Panel, StatusPill } from "../ui";
+import { Choice, LANGUAGE_LABEL, OriginBadge, Panel, StatusPill } from "../ui";
 import { SceneCard } from "./SceneCard";
 import { ListEditor } from "./ListEditor";
 import { RenderPanel } from "./RenderPanel";
@@ -224,6 +224,7 @@ export function ReviewEditor({ id }: { id: string }) {
           <span className="text-slate-300">|</span>
           <span className="font-semibold">Storyboard · {LANGUAGE_LABEL[lang]}</span>
           <StatusPill status={dirty ? "draft" : project.status} />
+          <OriginBadge origin={project.origin} contact={project.originContact} />
           {project.demo && (
             <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800">
               Demo storyboard

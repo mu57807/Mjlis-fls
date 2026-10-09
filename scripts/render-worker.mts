@@ -18,6 +18,7 @@ const { generateVoiceover } = await import("../src/lib/tts/voiceover");
 const { TtsError } = await import("../src/lib/tts/types");
 const { buildSrt, buildTimeline, FPS } = await import("../src/lib/video");
 const { bundleVideo, renderThumbnail, renderVideo } = await import("../src/lib/render/remotion");
+const { notifyRenderFinished } = await import("../src/lib/notify");
 
 const projectId = process.argv[2];
 if (!projectId) {
@@ -89,14 +90,27 @@ async function main() {
   }
 }
 
+/** WhatsApp / API callback; a failure here must not undo a finished render. */
+async function notify() {
+  try {
+    await notifyRenderFinished(projectId);
+  } catch (err) {
+    log("notification failed", err);
+  }
+}
+
 main()
-  .then(() => process.exit(0))
-  .catch((err) => {
+  .then(async () => {
+    await notify();
+    process.exit(0);
+  })
+  .catch(async (err) => {
     console.error(err);
     const message =
       err instanceof TtsError
         ? err.message
         : `Render failed: ${err instanceof Error ? err.message : String(err)}`;
     failRender(projectId, message);
+    await notify();
     process.exit(1);
   });
