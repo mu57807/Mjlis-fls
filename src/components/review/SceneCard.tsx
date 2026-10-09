@@ -109,6 +109,13 @@ export function SceneCard({
         </div>
       </div>
 
+      {(scene.visual_type === "root_cause" || scene.visual_type === "checklist") && (
+        <p className="mb-3 rounded-md bg-sky-50 px-3 py-1.5 text-xs text-sky-900">
+          The bullet points in this scene come from{" "}
+          <b>{scene.visual_type === "root_cause" ? "“Why it happened”" : "“Actions”"}</b> in the LFI summary
+          below.
+        </p>
+      )}
       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
         On-screen caption
       </label>

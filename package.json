@@ -9,18 +9,26 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "check": "npm run typecheck && npm run lint",
-    "self-check": "tsx scripts/self-check.ts"
+    "self-check": "tsx scripts/self-check.ts",
+    "render:sample": "tsx scripts/render-sample.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/noto-kufi-arabic": "^5.3.0",
+    "@remotion/bundler": "4.0.534",
+    "@remotion/fonts": "4.0.534",
+    "@remotion/player": "4.0.534",
+    "@remotion/renderer": "4.0.534",
     "better-sqlite3": "^13.0.3",
     "lucide-react": "^1.54.0",
+    "microsoft-cognitiveservices-speech-sdk": "^1.52.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "remotion": "4.0.534",
     "server-only": "^0.0.1",
+    "tsx": "^4.23.15",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -32,7 +40,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
-    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "engines": {

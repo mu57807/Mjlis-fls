@@ -6,6 +6,7 @@ import {
   TARGET_LENGTHS,
   VISUAL_TYPES,
 } from "./catalog";
+import type { AudioManifest } from "./video";
 
 // ---------------------------------------------------------------------------
 // What we ask Claude to return. Kept free of numeric/length limits because the
@@ -94,9 +95,23 @@ export interface Project {
   storyboard: Storyboard;
   approvedAt: string | null;
   demo: boolean;
+  /** Voiceover clips per scene id, if generated. */
+  audio: AudioManifest | null;
+  render: RenderInfo;
 }
 
-export type ProjectSummary = Omit<Project, "sourceText" | "storyboard"> & {
+export interface RenderInfo {
+  stage: string | null;
+  progress: number;
+  error: string | null;
+  startedAt: string | null;
+  videoFile: string | null;
+  thumbFile: string | null;
+  videoSeconds: number | null;
+  renderedAt: string | null;
+}
+
+export type ProjectSummary = Omit<Project, "sourceText" | "storyboard" | "audio"> & {
   title: string;
   sceneCount: number;
 };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Trash2 } from "lucide-react";
+import { Download, Film, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/lib/schema";
 import { LANGUAGE_LABEL, Panel, StatusPill } from "./ui";
 
@@ -42,6 +42,21 @@ export function HistoryList() {
       <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-surface">
         {projects?.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+            <Link
+              href={`/projects/${p.id}`}
+              className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md bg-slate-200 text-slate-400"
+            >
+              {p.status === "done" && p.render.thumbFile ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/projects/${p.id}/files/thumbnail.jpg?v=${encodeURIComponent(p.render.renderedAt ?? "")}`}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Film size={22} />
+              )}
+            </Link>
             <div className="min-w-0 flex-1">
               <Link
                 href={`/projects/${p.id}`}
@@ -56,6 +71,16 @@ export function HistoryList() {
               </div>
             </div>
             <StatusPill status={p.status} />
+            {p.status === "done" && (
+              <a
+                href={`/api/projects/${p.id}/files/video.mp4?download=1`}
+                title="Download MP4"
+                aria-label="Download MP4"
+                className="rounded-md p-1.5 text-brand hover:bg-slate-100"
+              >
+                <Download size={16} />
+              </a>
+            )}
             <button
               type="button"
               aria-label="Delete"

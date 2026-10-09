@@ -4,6 +4,8 @@ import { DEMO_STORYBOARDS } from "../src/samples/demo-storyboards";
 import { SAMPLE_INCIDENTS } from "../src/samples/incidents";
 import { StoryboardSchema, type Storyboard } from "../src/lib/schema";
 import { checkStoryboard, fitDurations, totalDuration } from "../src/lib/storyboard-checks";
+import { buildCues, buildSrt, buildTimeline, estimateWordTimings, FPS } from "../src/lib/video";
+import { wordsFromAlignment } from "../src/lib/tts/elevenlabs";
 
 let failures = 0;
 function expect(cond: boolean, msg: string) {
@@ -68,6 +70,32 @@ const leakyAr: Storyboard = {
 const arFlags = checkStoryboard(leakyAr, 60, SAMPLE_INCIDENTS[1].text).identifiers.map((f) => f.text);
 for (const needle of ["النجم", "الريان"]) {
   expect(arFlags.includes(needle), `detector flags leftover Arabic "${needle}"`);
+}
+
+// Video timing
+{
+  const raw = DEMO_STORYBOARDS["dropped-object"].en;
+  const sb: Storyboard = { ...raw, language: "en", scenes: raw.scenes.map((s, i) => ({ ...s, id: `s${i}` })) };
+  const silent = buildTimeline({ storyboard: sb, audio: null });
+  expect(silent.durationInFrames === 60 * FPS, "silent video is exactly 60s");
+  const longAudio = {
+    s1: { file: "a.mp3", text: sb.scenes[1].narration, durationSec: 20, words: [] },
+  };
+  const voiced = buildTimeline({ storyboard: sb, audio: longAudio });
+  expect(voiced.scenes[1].durationInFrames > 13 * FPS, "scene grows to fit a longer voiceover");
+  const stale = buildTimeline({ storyboard: sb, audio: { s1: { ...longAudio.s1, text: "old text" } } });
+  expect(stale.durationInFrames === 60 * FPS, "voiceover for edited narration is ignored");
+  const words = estimateWordTimings(sb.scenes[2].narration, 14, "en");
+  const cues = buildCues(words, 0.3);
+  expect(cues.every((c) => c.text.length <= 48), "subtitle lines stay short");
+  expect(cues.map((c) => c.text).join(" ") === sb.scenes[2].narration, "subtitles contain the whole narration");
+  expect(buildSrt({ storyboard: sb, audio: null }).startsWith("1\n00:00:00,300 --> "), "SRT file is well formed");
+  const aligned = wordsFromAlignment({
+    characters: [..."Stop work"],
+    character_start_times_seconds: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+    character_end_times_seconds: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+  });
+  expect(aligned.length === 2 && aligned[1].text === "work" && aligned[1].start === 0.5, "ElevenLabs timings become words");
 }
 
 console.log(failures ? `\n${failures} check(s) failed.` : "\nAll checks passed.");

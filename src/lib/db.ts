@@ -1,16 +1,9 @@
-import "server-only";
 import Database from "better-sqlite3";
-import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { dataDir } from "./storage";
 import type { Project, ProjectStatus, ProjectSummary, Storyboard } from "./schema";
-
-export function dataDir(): string {
-  // Runtime-configured folder; tell the bundler not to trace it.
-  const dir = path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.LFI_DATA_DIR || "./data");
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
+import type { AudioManifest } from "./video";
 
 // One connection per server process (kept on globalThis so hot reload in
 // development does not open a new one on every code change).
@@ -45,6 +38,16 @@ const MIGRATIONS: string[] = [
    );
    CREATE INDEX projects_created ON projects(created_at DESC);
    CREATE INDEX projects_batch ON projects(batch_id);`,
+  `ALTER TABLE projects ADD COLUMN audio_manifest TEXT;
+   ALTER TABLE projects ADD COLUMN render_stage TEXT;
+   ALTER TABLE projects ADD COLUMN render_progress REAL NOT NULL DEFAULT 0;
+   ALTER TABLE projects ADD COLUMN render_error TEXT;
+   ALTER TABLE projects ADD COLUMN render_pid INTEGER;
+   ALTER TABLE projects ADD COLUMN render_started_at TEXT;
+   ALTER TABLE projects ADD COLUMN video_file TEXT;
+   ALTER TABLE projects ADD COLUMN thumb_file TEXT;
+   ALTER TABLE projects ADD COLUMN video_seconds REAL;
+   ALTER TABLE projects ADD COLUMN rendered_at TEXT;`,
 ];
 
 function migrate(conn: Database.Database) {
@@ -70,6 +73,16 @@ interface ProjectRow {
   storyboard: string;
   approved_at: string | null;
   demo: number;
+  audio_manifest: string | null;
+  render_stage: string | null;
+  render_progress: number;
+  render_error: string | null;
+  render_pid: number | null;
+  render_started_at: string | null;
+  video_file: string | null;
+  thumb_file: string | null;
+  video_seconds: number | null;
+  rendered_at: string | null;
 }
 
 function toProject(r: ProjectRow): Project {
@@ -86,6 +99,17 @@ function toProject(r: ProjectRow): Project {
     storyboard: JSON.parse(r.storyboard) as Storyboard,
     approvedAt: r.approved_at,
     demo: r.demo === 1,
+    audio: r.audio_manifest ? (JSON.parse(r.audio_manifest) as AudioManifest) : null,
+    render: {
+      stage: r.render_stage,
+      progress: r.render_progress,
+      error: r.render_error,
+      startedAt: r.render_started_at,
+      videoFile: r.video_file,
+      thumbFile: r.thumb_file,
+      videoSeconds: r.video_seconds,
+      renderedAt: r.rendered_at,
+    },
   };
 }
 
@@ -124,7 +148,20 @@ export function getProject(id: string): Project | null {
   const row = db().prepare(`SELECT * FROM projects WHERE id = ?`).get(id) as
     | ProjectRow
     | undefined;
+  if (row && row.status === "rendering" && row.render_pid && !isAlive(row.render_pid)) {
+    failRender(id, "The render stopped unexpectedly (the app may have been restarted). Please try again.");
+    return getProject(id);
+  }
   return row ? toProject(row) : null;
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function listProjects(): ProjectSummary[] {
@@ -144,6 +181,7 @@ export function listProjects(): ProjectSummary[] {
       targetSeconds: p.targetSeconds,
       approvedAt: p.approvedAt,
       demo: p.demo,
+      render: p.render,
       title: p.storyboard.title,
       sceneCount: p.storyboard.scenes.length,
     };
@@ -169,7 +207,8 @@ export function saveStoryboard(
     .prepare(
       `UPDATE projects
          SET storyboard = ?, aspect_ratio = ?, target_seconds = ?,
-             updated_at = ?, status = 'draft', approved_at = NULL
+             updated_at = ?, status = 'draft', approved_at = NULL,
+             video_file = NULL, thumb_file = NULL, render_error = NULL, render_stage = NULL
        WHERE id = ?`,
     )
     .run(JSON.stringify(storyboard), settings.aspectRatio, settings.targetSeconds, now, id);
@@ -190,4 +229,57 @@ export function approveProject(id: string): Project | null {
 
 export function deleteProject(id: string): boolean {
   return db().prepare(`DELETE FROM projects WHERE id = ?`).run(id).changes > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Voiceover and rendering
+// ---------------------------------------------------------------------------
+
+export function setAudioManifest(id: string, manifest: AudioManifest | null) {
+  db()
+    .prepare(`UPDATE projects SET audio_manifest = ? WHERE id = ?`)
+    .run(manifest ? JSON.stringify(manifest) : null, id);
+}
+
+/** Atomically move an approved project into "rendering". Returns false if not allowed. */
+export function claimRender(id: string): boolean {
+  const res = db()
+    .prepare(
+      `UPDATE projects
+         SET status = 'rendering', render_stage = 'Starting', render_progress = 0,
+             render_error = NULL, render_pid = NULL, render_started_at = ?
+       WHERE id = ? AND approved_at IS NOT NULL AND status IN ('approved', 'done', 'failed')`,
+    )
+    .run(new Date().toISOString(), id);
+  return res.changes > 0;
+}
+
+export function setRenderPid(id: string, pid: number) {
+  db().prepare(`UPDATE projects SET render_pid = ? WHERE id = ?`).run(pid, id);
+}
+
+export function updateRender(id: string, stage: string, progress: number) {
+  db()
+    .prepare(`UPDATE projects SET render_stage = ?, render_progress = ? WHERE id = ? AND status = 'rendering'`)
+    .run(stage, Math.max(0, Math.min(1, progress)), id);
+}
+
+export function finishRender(id: string, r: { videoFile: string; thumbFile: string; videoSeconds: number }) {
+  db()
+    .prepare(
+      `UPDATE projects
+         SET status = 'done', render_stage = 'Done', render_progress = 1, render_pid = NULL,
+             video_file = ?, thumb_file = ?, video_seconds = ?, rendered_at = ?
+       WHERE id = ?`,
+    )
+    .run(r.videoFile, r.thumbFile, r.videoSeconds, new Date().toISOString(), id);
+}
+
+export function failRender(id: string, error: string) {
+  db()
+    .prepare(
+      `UPDATE projects SET status = 'failed', render_error = ?, render_pid = NULL
+       WHERE id = ? AND status = 'rendering'`,
+    )
+    .run(error.slice(0, 2000), id);
 }

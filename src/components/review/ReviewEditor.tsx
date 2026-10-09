@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { CheckCircle2, Clapperboard, Plus, Save, Wand2 } from "lucide-react";
 import type { Project, Scene, Storyboard } from "@/lib/schema";
@@ -8,6 +9,13 @@ import { checkStoryboard, fitDurations } from "@/lib/storyboard-checks";
 import { Choice, LANGUAGE_LABEL, Panel, StatusPill } from "../ui";
 import { SceneCard } from "./SceneCard";
 import { ListEditor } from "./ListEditor";
+import { RenderPanel } from "./RenderPanel";
+
+// The video player only runs in the browser.
+const VideoPreview = dynamic(() => import("./VideoPreview"), {
+  ssr: false,
+  loading: () => <div className="aspect-video w-full animate-pulse rounded-xl bg-slate-200" />,
+});
 
 interface Sibling {
   id: string;
@@ -21,7 +29,8 @@ export function ReviewEditor({ id }: { id: string }) {
   const [aspectRatio, setAspectRatio] = useState<Project["aspectRatio"]>("16:9");
   const [targetSeconds, setTargetSeconds] = useState<60 | 90>(60);
   const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState<null | "save" | "approve">(null);
+  const [busy, setBusy] = useState<null | "save" | "approve" | "render" | "voiceover">(null);
+  const [ttsProvider, setTtsProvider] = useState("none");
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -44,6 +53,7 @@ export function ReviewEditor({ id }: { id: string }) {
         if (cancelled) return;
         applyProject(data.project);
         setSiblings(data.siblings);
+        setTtsProvider(data.tts);
       })
       .catch((err) => !cancelled && setLoadError(String(err.message ?? err)));
     return () => {
@@ -58,6 +68,17 @@ export function ReviewEditor({ id }: { id: string }) {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
+
+  // While rendering, poll for progress (without touching unsaved edits).
+  const rendering = project?.status === "rendering";
+  useEffect(() => {
+    if (!rendering) return;
+    const timer = setInterval(async () => {
+      const res = await fetch(`/api/projects/${id}`);
+      if (res.ok) setProject((await res.json()).project);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [rendering, id]);
 
   const report = useMemo(
     () => (sb && project ? checkStoryboard(sb, targetSeconds, project.sourceText) : null),
@@ -154,10 +175,42 @@ export function ReviewEditor({ id }: { id: string }) {
     }
   }
 
+  async function render() {
+    setBusy("render");
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${id}/render`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not start the render.");
+      setProject(data.project);
+      document.getElementById("video")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function voiceover() {
+    setBusy("voiceover");
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${id}/voiceover`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not generate the voiceover.");
+      setProject(data.project);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const sceneWarnings = (sceneId: string) =>
     report.warnings.filter((w) => w.sceneId === sceneId).map((w) => w.message);
   const generalWarnings = report.warnings.filter((w) => !w.sceneId);
-  const approved = project.status === "approved" && !dirty;
+  const approved = !!project.approvedAt && !dirty;
+  const canRender = approved && project.status !== "rendering";
   const durationOk = Math.abs(report.totalSeconds - targetSeconds) <= targetSeconds * 0.1;
 
   return (
@@ -312,6 +365,25 @@ export function ReviewEditor({ id }: { id: string }) {
         </div>
       </section>
 
+      {/* ---------- Preview ---------- */}
+      <section className="space-y-2">
+        <h2 className="text-lg font-bold">Preview</h2>
+        <p className="text-sm text-muted">
+          Updates as you edit. Subtitle timing is estimated until a voiceover has been generated.
+        </p>
+        <VideoPreview projectId={id} storyboard={sb} aspectRatio={aspectRatio} audio={project.audio} />
+      </section>
+
+      <RenderPanel
+        project={project}
+        canRender={canRender}
+        dirty={dirty}
+        ttsProvider={ttsProvider}
+        busy={busy}
+        onRender={render}
+        onVoiceover={voiceover}
+      />
+
       {/* ---------- Scenes ---------- */}
       <section className="space-y-3">
         <h2 className="text-lg font-bold">Scenes</h2>
@@ -433,9 +505,11 @@ export function ReviewEditor({ id }: { id: string }) {
               <span className="text-amber-700">
                 Unsaved changes{project.status === "approved" ? " – saving will need a new approval" : ""}
               </span>
+            ) : project.status === "rendering" ? (
+              <span className="font-semibold text-sky-700">Rendering… {Math.round(project.render.progress * 100)}%</span>
             ) : approved ? (
               <span className="inline-flex items-center gap-1 font-semibold text-ok">
-                <CheckCircle2 size={16} /> Approved. Video rendering will be added in Phase 4.
+                <CheckCircle2 size={16} /> Approved{project.status === "done" ? " · video ready" : " · ready to render"}
               </span>
             ) : (
               <span className="text-muted">Review every scene, then approve.</span>
@@ -459,11 +533,12 @@ export function ReviewEditor({ id }: { id: string }) {
           </button>
           <button
             type="button"
-            disabled
-            title={approved ? "Coming in Phase 4" : "Approve the storyboard first"}
-            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white opacity-40"
+            onClick={render}
+            disabled={!canRender || busy !== null}
+            title={canRender ? "Render the MP4" : "Approve the storyboard first"}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Clapperboard size={16} /> Render video
+            <Clapperboard size={16} /> {busy === "render" ? "Starting…" : project.status === "done" ? "Render again" : "Render video"}
           </button>
         </div>
       </div>

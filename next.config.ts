@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // better-sqlite3 is a native module; keep it out of the server bundle.
-  serverExternalPackages: ["better-sqlite3"],
+  // Node-only packages; load them at runtime instead of bundling them.
+  serverExternalPackages: ["better-sqlite3", "microsoft-cognitiveservices-speech-sdk"],
   turbopack: {
     rules: {
       "*.css": {

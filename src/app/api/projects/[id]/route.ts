@@ -2,13 +2,14 @@ import { z } from "zod";
 import { ASPECT_RATIOS } from "@/lib/catalog";
 import { StoryboardSchema } from "@/lib/schema";
 import { deleteProject, getProject, saveStoryboard, siblingProjects } from "@/lib/db";
+import { ttsProviderName } from "@/lib/tts";
 
 // GET /api/projects/:id - project with its storyboard.
 export async function GET(_req: Request, ctx: RouteContext<"/api/projects/[id]">) {
   const { id } = await ctx.params;
   const project = getProject(id);
   if (!project) return Response.json({ error: "Not found" }, { status: 404 });
-  return Response.json({ project, siblings: siblingProjects(project.batchId, id) });
+  return Response.json({ project, siblings: siblingProjects(project.batchId, id), tts: ttsProviderName() });
 }
 
 const SaveSchema = z.object({

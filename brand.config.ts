@@ -40,6 +40,18 @@ export const brand = {
     arabic: "Noto Kufi Arabic",
   },
 
+  /** Font files used inside the videos (under /public). Must match the families above. */
+  fontFiles: {
+    latin: {
+      regular: "/fonts/inter-latin-400-normal.woff2",
+      bold: "/fonts/inter-latin-700-normal.woff2",
+    },
+    arabic: {
+      regular: "/fonts/noto-kufi-arabic-arabic-400-normal.woff2",
+      bold: "/fonts/noto-kufi-arabic-arabic-700-normal.woff2",
+    },
+  },
+
   /** Default closing-card line when a storyboard has none. */
   closingMessage: {
     en: "Safety is everyone's responsibility.",
