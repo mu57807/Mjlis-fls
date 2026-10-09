@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* Brand colours are injected as CSS variables from brand.config.ts (see layout.tsx). */
+@theme inline {
+  --color-brand: var(--brand-primary);
+  --color-brand-soft: var(--brand-primary-soft);
+  --color-accent: var(--brand-accent);
+  --color-accent-soft: var(--brand-accent-soft);
+  --color-page: var(--brand-background);
+  --color-surface: var(--brand-surface);
+  --color-ink: var(--brand-text);
+  --color-muted: var(--brand-muted);
+  --color-ok: var(--brand-success);
+  --color-danger: var(--brand-danger);
+  --font-sans: var(--brand-font-latin), var(--brand-font-arabic), system-ui, sans-serif;
+}
+
+body {
+  background: var(--brand-background);
+  color: var(--brand-text);
+  font-family: var(--font-sans);
+}
+
+/* Arabic text reads better with an Arabic-first font and more line height.
+   In the base layer so Tailwind classes on an element can still override it. */
+@layer base {
+  [dir="rtl"],
+  :lang(ar) {
+    font-family: var(--brand-font-arabic), var(--brand-font-latin), system-ui, sans-serif;
+    line-height: 1.8;
+  }
+}
