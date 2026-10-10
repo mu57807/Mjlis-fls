@@ -22,11 +22,18 @@ function licenseKey(): string | null {
  * Bundle the video templates. Audio files are copied into a temporary
  * public folder together with the logo and fonts, so the renderer can load them.
  */
-export async function bundleVideo(opts: { audioDir: string | null; onProgress?: (p: number) => void }) {
+export async function bundleVideo(opts: {
+  audioDir: string | null;
+  imageDir?: string | null;
+  onProgress?: (p: number) => void;
+}) {
   const publicDir = fs.mkdtempSync(path.join(os.tmpdir(), "lfi-public-"));
   fs.cpSync(path.join(ROOT, "public"), publicDir, { recursive: true });
   if (opts.audioDir && fs.existsSync(opts.audioDir)) {
     fs.cpSync(opts.audioDir, path.join(publicDir, "audio"), { recursive: true });
+  }
+  if (opts.imageDir && fs.existsSync(opts.imageDir)) {
+    fs.cpSync(opts.imageDir, path.join(publicDir, "images"), { recursive: true });
   }
   const serveUrl = await bundle({
     entryPoint: path.join(ROOT, "src", "remotion", "index.ts"),

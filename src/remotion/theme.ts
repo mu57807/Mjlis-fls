@@ -25,6 +25,8 @@ export const SCENE_LABEL: Record<VisualType, Record<Language, string>> = {
   root_cause: { en: "WHY IT HAPPENED", ar: "لماذا حدث" },
   key_lesson: { en: "KEY LESSON", ar: "الدرس المستفاد" },
   checklist: { en: "DO THIS INSTEAD", ar: "افعل هذا بدلاً من ذلك" },
+  sustain: { en: "SUSTAIN THE LEARNING", ar: "استدامة التعلّم" },
+  reflective_questions: { en: "DISCUSS WITH YOUR TEAM", ar: "ناقش مع فريقك" },
   closing_card: { en: "", ar: "" },
 };
 

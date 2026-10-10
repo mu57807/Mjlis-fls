@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowDown, ArrowUp, GripVertical, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, ShieldAlert, Trash2, X } from "lucide-react";
+import type { ComplianceIssue } from "@/lib/compliance";
 import {
   ICONS,
   ICON_LABELS,
@@ -10,7 +11,7 @@ import {
   type Language,
   type VisualType,
 } from "@/lib/catalog";
-import type { Scene } from "@/lib/schema";
+import type { Media, Scene } from "@/lib/schema";
 import { countWords, estimateSpeechSeconds } from "@/lib/storyboard-checks";
 import { SafetyIcon } from "../SafetyIcon";
 
@@ -22,6 +23,9 @@ export function SceneCard({
   count,
   language,
   warnings,
+  problems = [],
+  media = [],
+  imageBase,
   onChange,
   onMove,
   onDelete,
@@ -33,6 +37,11 @@ export function SceneCard({
   count: number;
   language: Language;
   warnings: string[];
+  /** Final-check problems in this scene (company names, IDs, unchecked pictures). */
+  problems?: ComplianceIssue[];
+  /** Pictures available to the video. */
+  media?: Media[];
+  imageBase?: string;
   onChange: (patch: Partial<Scene>) => void;
   onMove: (to: number) => void;
   onDelete: () => void;
@@ -47,7 +56,11 @@ export function SceneCard({
     <article
       {...dragHandlers}
       className={`rounded-xl border bg-surface p-4 shadow-sm transition ${
-        isDragOver ? "border-accent ring-2 ring-accent/40" : "border-slate-200"
+        problems.length > 0
+          ? "border-red-500 ring-2 ring-red-300"
+          : isDragOver
+            ? "border-accent ring-2 ring-accent/40"
+            : "border-slate-200"
       }`}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -125,7 +138,7 @@ export function SceneCard({
         aria-label={`Scene ${index + 1} caption`}
         value={scene.caption}
         onChange={(e) => onChange({ caption: e.target.value })}
-        className="mb-3 w-full rounded-md border border-slate-300 px-3 py-2 font-semibold"
+        className={`mb-3 w-full rounded-md border px-3 py-2 font-semibold ${problems.some((p) => p.where.endsWith("caption")) ? "border-red-500 bg-red-50" : "border-slate-300"}`}
       />
 
       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">
@@ -138,7 +151,7 @@ export function SceneCard({
         value={scene.narration}
         onChange={(e) => onChange({ narration: e.target.value })}
         rows={3}
-        className={`w-full rounded-md border px-3 py-2 ${tooLong ? "border-amber-400" : "border-slate-300"}`}
+        className={`w-full rounded-md border px-3 py-2 ${problems.some((p) => p.where.endsWith("narration")) ? "border-red-500 bg-red-50" : tooLong ? "border-amber-400" : "border-slate-300"}`}
       />
       <p className={`mt-1 text-xs ${tooLong ? "font-semibold text-amber-700" : "text-muted"}`}>
         {countWords(scene.narration)} words · about {Math.ceil(speech)}s to read aloud
@@ -187,6 +200,64 @@ export function SceneCard({
           )}
         </div>
       </div>
+
+      {(scene.visual_type === "what_happened" || (scene.images ?? []).length > 0) && media.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            Pictures in this scene ({(scene.images ?? []).length})
+          </div>
+          <div className="flex flex-wrap items-start gap-2">
+            {(scene.images ?? []).map((file, k, list) => {
+              const m = media.find((x) => x.file === file);
+              const unsafe = m?.flagged && !m.checked;
+              return (
+                <div key={file} className={`w-28 overflow-hidden rounded-md border ${unsafe ? "border-red-500" : "border-slate-300"}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`${imageBase}${file}`} alt={m?.description ?? ""} className="h-16 w-full bg-slate-900 object-contain" />
+                  <div className="flex justify-between p-0.5">
+                    <button type="button" aria-label="Move earlier" disabled={k === 0} className="p-0.5 disabled:opacity-30"
+                      onClick={() => {
+                        const imgs = [...list];
+                        [imgs[k - 1], imgs[k]] = [imgs[k], imgs[k - 1]];
+                        onChange({ images: imgs });
+                      }}><ArrowLeft size={13} /></button>
+                    <button type="button" aria-label="Remove picture from scene" className="p-0.5 text-danger"
+                      onClick={() => onChange({ images: list.filter((f) => f !== file) })}><X size={13} /></button>
+                    <button type="button" aria-label="Move later" disabled={k === list.length - 1} className="p-0.5 disabled:opacity-30"
+                      onClick={() => {
+                        const imgs = [...list];
+                        [imgs[k + 1], imgs[k]] = [imgs[k], imgs[k + 1]];
+                        onChange({ images: imgs });
+                      }}><ArrowRight size={13} /></button>
+                  </div>
+                </div>
+              );
+            })}
+            {media.some((m) => !(scene.images ?? []).includes(m.file)) && (
+              <select aria-label="Add picture" value="" className="rounded border border-dashed border-slate-400 bg-white px-2 py-1 text-xs text-muted"
+                onChange={(e) => e.target.value && onChange({ images: [...(scene.images ?? []), e.target.value] })}>
+                <option value="">+ Add picture</option>
+                {media.filter((m) => !(scene.images ?? []).includes(m.file)).map((m, i) => (
+                  <option key={m.file} value={m.file}>{m.description || `Picture ${i + 1}`}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
+
+      {problems.length > 0 && (
+        <ul className="mt-3 space-y-0.5 rounded-md bg-red-50 py-2 pl-3 pr-3 text-xs font-semibold text-red-900">
+          {problems.map((p) => (
+            <li key={`${p.key}|${p.where}`} className="flex gap-1.5">
+              <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+              <span>
+                <mark className="bg-red-200 px-0.5">{p.text}</mark> ({p.where}): {p.reason}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {warnings.length > 0 && (
         <ul className="mt-3 list-disc space-y-0.5 rounded-md bg-amber-50 py-2 pl-7 pr-3 text-xs text-amber-900">

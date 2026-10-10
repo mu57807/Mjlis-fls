@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
-import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { Check, TriangleAlert } from "lucide-react";
+import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { Check, MessageCircleQuestion, TriangleAlert } from "lucide-react";
 import { brand } from "@brand";
 import type { IconName, Language } from "@/lib/catalog";
 import type { Scene, Storyboard } from "@/lib/schema";
@@ -16,8 +16,10 @@ export interface SceneProps {
   durationInFrames: number;
   /** 0..1 progress through the whole video at this scene's current frame. */
   progress: number;
-  /** List items for root-cause / checklist scenes. */
+  /** List items for root-cause / checklist / sustain / question scenes. */
   items: string[];
+  /** URL of a picture file. */
+  imageSrc: (file: string) => string;
 }
 
 /** Text slides in from the reading-start side (left for English, right for Arabic). */
@@ -45,6 +47,17 @@ export function TitleCard({ scene, storyboard, lang }: SceneProps) {
   const title = useSlideIn(lang, 8);
   const labelIn = useEnter(4, 18);
   const text = scene.caption || storyboard.title;
+  const f = storyboard.facts;
+  const facts = f
+    ? (
+        [
+          ["date", [f.date, f.time].filter(Boolean).join(" · ")],
+          ["location", f.location],
+          ["risk_category", f.risk_category],
+          ["potential_severity", f.potential_severity],
+        ] as const
+      ).filter(([, v]) => v.trim())
+    : [];
   return (
     <AbsoluteFill style={{ background: `linear-gradient(160deg, ${C.primary} 0%, ${C.primarySoft} 100%)`, color: "#fff" }}>
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 22, background: HAZARD_STRIPES }} />
@@ -73,13 +86,109 @@ export function TitleCard({ scene, storyboard, lang }: SceneProps) {
         <div style={{ fontSize: L.titleSize, fontWeight: 700, lineHeight: 1.2, maxWidth: L.vertical ? "100%" : "82%", ...title }}>
           {text}
         </div>
-        <div style={{ display: "flex", gap: 28, marginTop: 8 }}>
-          {scene.icons.map((icon, i) => (
-            <IconBadge key={icon} name={icon} size={L.vertical ? 150 : 120} delay={18 + i * 6} bg={C.accent} />
-          ))}
-        </div>
+        {facts.length > 0 ? (
+          <FactChips facts={facts} lang={lang} />
+        ) : (
+          <div style={{ display: "flex", gap: 28, marginTop: 8 }}>
+            {scene.icons.map((icon, i) => (
+              <IconBadge key={icon} name={icon} size={L.vertical ? 150 : 120} delay={18 + i * 6} bg={C.accent} />
+            ))}
+          </div>
+        )}
       </div>
     </AbsoluteFill>
+  );
+}
+
+const FACT_LABELS: Record<string, Record<Language, string>> = {
+  date: { en: "Date", ar: "التاريخ" },
+  location: { en: "Location", ar: "الموقع" },
+  risk_category: { en: "Risk", ar: "فئة الخطر" },
+  potential_severity: { en: "Potential severity", ar: "الخطورة المحتملة" },
+};
+
+function FactChips({ facts, lang }: { facts: readonly (readonly [string, string])[]; lang: Language }) {
+  const L = useLayout();
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 18, maxWidth: L.vertical ? "100%" : "90%" }}>
+      {facts.map(([k, v], i) => (
+        <FactChip key={k} label={FACT_LABELS[k][lang]} value={v} delay={18 + i * 5} lang={lang} />
+      ))}
+    </div>
+  );
+}
+
+function FactChip({ label, value, delay, lang }: { label: string; value: string; delay: number; lang: Language }) {
+  const L = useLayout();
+  const p = useEnter(delay, 16);
+  const highlight = label === FACT_LABELS.potential_severity[lang];
+  return (
+    <div
+      style={{
+        background: highlight ? C.accent : "rgba(255,255,255,0.12)",
+        border: "2px solid rgba(255,255,255,0.25)",
+        borderRadius: 16,
+        padding: L.vertical ? "14px 24px" : "10px 22px",
+        textAlign: "start",
+        opacity: p,
+        transform: `translateY(${(1 - p) * 20}px)`,
+      }}
+    >
+      <div style={{ fontSize: L.vertical ? 24 : 20, fontWeight: 700, opacity: 0.8, letterSpacing: tracking(lang, 0.06) }}>
+        {label}
+      </div>
+      <div style={{ fontSize: L.vertical ? 34 : 30, fontWeight: 700 }}>{value}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Incident pictures: one after another, slowly zooming (Ken Burns)
+// ---------------------------------------------------------------------------
+function PhotoShow({ files, imageSrc, durationInFrames }: { files: string[]; imageSrc: (f: string) => string; durationInFrames: number }) {
+  const frame = useCurrentFrame();
+  const per = Math.max(1, Math.floor(durationInFrames / files.length));
+  const FADE = 10;
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        borderRadius: 24,
+        overflow: "hidden",
+        background: C.primary,
+        boxShadow: "0 24px 60px rgba(11,37,69,0.3)",
+        border: `8px solid #fff`,
+      }}
+    >
+      {files.map((file, i) => {
+        const start = i * per;
+        const local = frame - start;
+        const visible = i === files.length - 1 ? local >= -FADE : local >= -FADE && local < per + FADE;
+        if (!visible) return null;
+        const opacity = interpolate(local, [-FADE, 0, per, per + FADE], [0, 1, 1, i === files.length - 1 ? 1 : 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        });
+        const zoom = interpolate(local, [0, per], [1, 1.08], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+        return (
+          <Img
+            key={file}
+            src={imageSrc(file)}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              opacity,
+              transform: `scale(${zoom})`,
+            }}
+          />
+        );
+      })}
+    </div>
   );
 }
 
@@ -123,10 +232,42 @@ function HeroIcon({ name, size }: { name: IconName; size: number }) {
   );
 }
 
-export function WhatHappened({ scene, lang, progress }: SceneProps) {
+export function WhatHappened({ scene, lang, progress, imageSrc, durationInFrames }: SceneProps) {
   const L = useLayout();
   const text = useSlideIn(lang, 4);
   const [hero, ...others] = scene.icons;
+  const images = scene.images ?? [];
+  if (images.length > 0) {
+    return (
+      <SceneShell lang={lang} type={scene.visual_type} progress={progress}>
+        <div
+          style={{
+            ...contentBox(L),
+            flexDirection: L.vertical ? "column" : "row",
+            alignItems: "stretch",
+            gap: L.vertical ? 50 : 60,
+          }}
+        >
+          <div style={{ flex: L.vertical ? "0 0 52%" : "1 1 60%", minHeight: 0 }}>
+            <PhotoShow files={images} imageSrc={imageSrc} durationInFrames={durationInFrames} />
+          </div>
+          <div style={{ flex: "1 1 40%", display: "flex", flexDirection: "column", justifyContent: "center", ...text }}>
+            <div style={{ width: 120, height: 12, background: C.accent, borderRadius: 6, marginBottom: 30 }} />
+            <div style={{ fontSize: L.captionSize - 4, fontWeight: 700, color: C.primary, lineHeight: 1.25 }}>
+              {scene.caption}
+            </div>
+            {scene.icons.length > 0 && (
+              <div style={{ display: "flex", gap: 22, marginTop: 36 }}>
+                {scene.icons.slice(0, 3).map((icon, i) => (
+                  <IconBadge key={icon} name={icon} size={L.vertical ? 120 : 104} delay={20 + i * 8} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </SceneShell>
+    );
+  }
   return (
     <SceneShell lang={lang} type={scene.visual_type} progress={progress}>
       <div
@@ -403,5 +544,81 @@ export function ClosingCard({ scene, lang }: SceneProps) {
         </div>
       </div>
     </AbsoluteFill>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reflective questions for the team, revealed one by one
+// ---------------------------------------------------------------------------
+function QuestionRow({ delay, lang, text, n, fontSize }: { delay: number; lang: Language; text: string; n: number; fontSize: number }) {
+  const p = useEnter(delay, 14);
+  const dx = (lang === "ar" ? 1 : -1) * 60 * (1 - p);
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 26,
+        background: "#fff",
+        borderRadius: 22,
+        padding: "20px 28px",
+        boxShadow: "0 10px 30px rgba(11,37,69,0.10)",
+        borderInlineStart: `10px solid ${C.accent}`,
+        opacity: p,
+        transform: `translateX(${dx}px)`,
+      }}
+    >
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          flexShrink: 0,
+          borderRadius: "50%",
+          background: C.primary,
+          color: "#fff",
+          fontSize: 34,
+          fontWeight: 700,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {n}
+      </div>
+      <div style={{ fontSize, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>{text}</div>
+    </div>
+  );
+}
+
+export function ReflectiveQuestions({ scene, lang, durationInFrames, items, progress }: SceneProps) {
+  const L = useLayout();
+  const header = useSlideIn(lang, 2);
+  const delays = staggeredDelays(items.length, durationInFrames, 16);
+  const fontSize = items.length > 3 ? L.bodySize - 4 : L.bodySize;
+  return (
+    <SceneShell lang={lang} type={scene.visual_type} progress={progress}>
+      <div style={{ ...contentBox(L), flexDirection: "column", justifyContent: "center", gap: L.vertical ? 34 : 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 24, ...header }}>
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: C.accent,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <MessageCircleQuestion size={56} color="#fff" strokeWidth={2.2} />
+          </div>
+          <div style={{ fontSize: L.captionSize - 6, fontWeight: 700, color: C.primary }}>{scene.caption}</div>
+        </div>
+        {items.map((q, i) => (
+          <QuestionRow key={i} n={i + 1} delay={delays[i]} lang={lang} text={q} fontSize={fontSize} />
+        ))}
+      </div>
+    </SceneShell>
   );
 }

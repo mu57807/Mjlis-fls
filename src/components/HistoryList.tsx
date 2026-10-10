@@ -6,8 +6,18 @@ import { Download, Film, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/lib/schema";
 import { LANGUAGE_LABEL, OriginBadge, Panel, StatusPill } from "./ui";
 
+interface AlertSummary {
+  id: string;
+  createdAt: string;
+  title: string;
+  fileType: string;
+  pictures: number;
+  projectIds: string[];
+}
+
 export function HistoryList() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
+  const [alerts, setAlerts] = useState<AlertSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -15,7 +25,17 @@ export function HistoryList() {
       .then((r) => r.json())
       .then((d) => setProjects(d.projects))
       .catch((e) => setError(String(e)));
+    fetch("/api/alerts")
+      .then((r) => r.json())
+      .then((d) => setAlerts(d.alerts ?? []))
+      .catch(() => {});
   }, []);
+
+  async function removeAlert(a: AlertSummary) {
+    if (!confirm(`Delete the uploaded alert "${a.title || "Untitled"}" and its pictures? Videos already made are kept.`)) return;
+    const res = await fetch(`/api/alerts/${a.id}`, { method: "DELETE" });
+    if (res.ok) setAlerts((cur) => cur.filter((x) => x.id !== a.id));
+  }
 
   async function remove(p: ProjectSummary) {
     if (!confirm(`Delete "${p.title}" (${LANGUAGE_LABEL[p.language]})? This cannot be undone.`)) return;
@@ -38,6 +58,33 @@ export function HistoryList() {
       {projects === null && !error && <p className="text-muted">Loading…</p>}
       {projects?.length === 0 && (
         <p className="text-muted">No storyboards yet. Create your first one from the New LFI page.</p>
+      )}
+      {alerts.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-bold">Uploaded alerts</h2>
+          <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-surface">
+            {alerts.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <Link href={`/alerts/${a.id}`} dir="auto" className="block truncate font-semibold hover:underline">
+                    {a.title || "Untitled alert"}
+                  </Link>
+                  <div className="mt-0.5 text-xs text-muted">
+                    {new Date(a.createdAt).toLocaleString()} · {a.fileType.toUpperCase()} · {a.pictures} picture(s)
+                  </div>
+                </div>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${a.projectIds.length ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-900"}`}>
+                  {a.projectIds.length ? `${a.projectIds.length} storyboard(s) made` : "Waiting for review"}
+                </span>
+                <button type="button" aria-label="Delete alert" title="Delete" onClick={() => removeAlert(a)}
+                  className="rounded-md p-1.5 text-muted hover:bg-red-50 hover:text-danger">
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <h2 className="pt-2 text-lg font-bold">Videos</h2>
+        </section>
       )}
       <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-surface">
         {projects?.map((p) => (

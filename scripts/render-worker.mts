@@ -13,7 +13,7 @@ for (const f of [".env.local", ".env"]) {
 const { getProject, setAudioManifest, updateRender, finishRender, failRender, setRenderPid } = await import(
   "../src/lib/db"
 );
-const { projectDir, audioDir } = await import("../src/lib/storage");
+const { projectDir, audioDir, imagesDir } = await import("../src/lib/storage");
 const { generateVoiceover } = await import("../src/lib/tts/voiceover");
 const { TtsError } = await import("../src/lib/tts/types");
 const { buildSrt, buildTimeline, FPS } = await import("../src/lib/video");
@@ -55,6 +55,7 @@ async function main() {
   log("bundle");
   const { serveUrl, cleanup } = await bundleVideo({
     audioDir: audio ? audioDir(projectId) : null,
+    imageDir: imagesDir(projectId),
     onProgress: (p) => updateRender(projectId, "Preparing video templates", 0.15 + 0.1 * p),
   });
 

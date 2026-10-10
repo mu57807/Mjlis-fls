@@ -8,6 +8,7 @@ const TYPES: Record<string, string> = {
   ".mp4": "video/mp4",
   ".mp3": "audio/mpeg",
   ".jpg": "image/jpeg",
+  ".png": "image/png",
   ".srt": "application/x-subrip; charset=utf-8",
 };
 
@@ -22,7 +23,7 @@ export function serveProjectFile(
   opts: { download?: boolean } = {},
 ): Response {
   const id = project.id;
-  if (!/^(video\.mp4|thumbnail\.jpg|subtitles\.srt|audio\/[\w-]+\.mp3)$/.test(rel)) {
+  if (!/^(video\.mp4|thumbnail\.jpg|subtitles\.srt|audio\/[\w-]+\.mp3|images\/[\w-]+\.(?:jpg|png))$/.test(rel)) {
     return new Response("Not found", { status: 404 });
   }
   const file = path.join(projectDir(id), rel);

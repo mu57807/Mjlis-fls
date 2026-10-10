@@ -13,7 +13,12 @@ export async function POST(request: Request, ctx: RouteContext<"/api/v1/lfi/[id]
   const { id } = await ctx.params;
   const existing = /^[0-9a-f-]{36}$/i.test(id) ? getProject(id) : null;
   if (!existing || existing.origin !== "api") return Response.json({ error: "Not found" }, { status: 404 });
-  const { project, error } = approveAndRender(id);
-  if (error) return Response.json({ error, project: project && projectForApi(project) }, { status: 409 });
+  const { project, error, check } = await approveAndRender(id);
+  if (error) {
+    return Response.json(
+      { error, project: project && projectForApi(project), problems: check?.issues.map(({ where, text, reason }) => ({ where, text, reason })) },
+      { status: 409 },
+    );
+  }
   return Response.json({ project: projectForApi(project!) }, { status: 202 });
 }

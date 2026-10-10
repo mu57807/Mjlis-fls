@@ -7,13 +7,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { DEMO_STORYBOARDS } from "../src/samples/demo-storyboards";
 import type { VideoProps } from "../src/lib/video";
+import { completeStoryboard } from "../src/lib/schema";
 import { bundleVideo, renderThumbnail, renderVideo } from "../src/lib/render/remotion";
 
 const [lang = "en", ratio = "16:9", mode = "video"] = process.argv.slice(2) as ["en" | "ar", "16:9" | "9:16", string];
 const sampleId = lang === "ar" ? "line-of-fire" : "dropped-object";
 const raw = DEMO_STORYBOARDS[sampleId][lang];
 const props: VideoProps = {
-  storyboard: { ...raw, language: lang, scenes: raw.scenes.map((s, i) => ({ ...s, id: `s${i}` })) },
+  storyboard: completeStoryboard(raw, lang),
   aspectRatio: ratio,
   audio: null,
   audioBase: null,

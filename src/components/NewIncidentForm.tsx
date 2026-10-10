@@ -4,10 +4,46 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SAMPLE_INCIDENTS } from "@/samples/incidents";
 import { Choice, Panel } from "./ui";
+import { AlertUpload } from "./alerts/AlertUpload";
 
 type OutputLanguage = "en" | "ar" | "both";
 
 export function NewIncidentForm({ demoMode }: { demoMode: boolean }) {
+  const [mode, setMode] = useState<"upload" | "text">("upload");
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">New Learning From Incident video</h1>
+        <p className="mt-1 text-muted">
+          Upload the HSE Flash / LFI alert file, or type the incident description. You review everything
+          before any video is made.
+        </p>
+      </div>
+      <div role="tablist" className="flex gap-1 rounded-xl bg-slate-200 p-1 text-sm font-semibold sm:w-fit">
+        {(
+          [
+            ["upload", "Upload alert file (PDF / PPTX)"],
+            ["text", "Type the description"],
+          ] as const
+        ).map(([m, label]) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={`flex-1 rounded-lg px-4 py-2 ${mode === m ? "bg-surface text-brand shadow" : "text-muted hover:text-ink"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === "upload" ? <AlertUpload demoMode={demoMode} /> : <TextIncidentForm demoMode={demoMode} />}
+    </div>
+  );
+}
+
+function TextIncidentForm({ demoMode }: { demoMode: boolean }) {
   const router = useRouter();
   const [description, setDescription] = useState("");
   const [outputLanguage, setOutputLanguage] = useState<OutputLanguage>("en");
@@ -37,13 +73,10 @@ export function NewIncidentForm({ demoMode }: { demoMode: boolean }) {
 
   return (
     <form onSubmit={submit} className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">New Learning From Incident video</h1>
-        <p className="mt-1 text-muted">
-          Paste the incident description below (Arabic or English). Claude will turn it into a
-          storyboard that you review and approve before any video is made.
-        </p>
-      </div>
+      <p className="text-muted">
+        Paste the incident description below (Arabic or English). Claude will turn it into a storyboard
+        that you review and approve before any video is made.
+      </p>
 
       {demoMode && (
         <Panel tone="info" title="Demo mode is on">
@@ -80,7 +113,7 @@ export function NewIncidentForm({ demoMode }: { demoMode: boolean }) {
           className="w-full rounded-xl border border-slate-300 bg-surface p-3 shadow-sm focus:border-brand focus:outline-none"
         />
         <p className="mt-1 text-xs text-muted">
-          Names of people, contractors, locations and ID numbers will be removed automatically. You
+          Names of people and companies, locations and ID numbers will be removed automatically. You
           will still be asked to check before approving. {description.length.toLocaleString()} characters.
         </p>
       </div>

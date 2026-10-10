@@ -20,7 +20,13 @@ export default function VideoPreview({
   audio: AudioManifest | null;
 }) {
   const inputProps: VideoProps = useMemo(
-    () => ({ storyboard, aspectRatio, audio, audioBase: `/api/projects/${projectId}/files/audio/` }),
+    () => ({
+      storyboard,
+      aspectRatio,
+      audio,
+      audioBase: `/api/projects/${projectId}/files/audio/`,
+      imageBase: `/api/projects/${projectId}/files/images/`,
+    }),
     [storyboard, aspectRatio, audio, projectId],
   );
   const { width, height } = dimensions(aspectRatio);

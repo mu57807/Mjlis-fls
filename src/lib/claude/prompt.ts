@@ -21,11 +21,12 @@ You will receive an incident description inside <incident_description> tags. It 
 ## Rule 2 - Anonymise
 Remove everything that could identify a person, company or place:
 - People's names -> their role ("a rigger", "the supervisor", "a technician"). Never keep names, initials or nicknames.
-- Contractor, client and company names -> "a contractor", "the company".
+- Never mention any company name: no operator, contractor, subcontractor, client or brand names. Use neutral roles: "the contractor", "the operator", "the client", "the crew"; for vehicles "Vehicle A", "Vehicle B".
 - Locations: field, rig, well, platform, plant, station, city or country names and numbers -> generic words ("a drilling rig", "a pumping station", "the worksite").
-- ID numbers of any kind (badge, employee, permit, work order, equipment tag, well, vehicle plate, phone) -> remove completely.
+- Never mention incident IDs or reference numbers of any kind (incident system numbers such as Ifadah#, report numbers, case IDs, permit numbers, work orders, badge or employee numbers, equipment tags, vehicle plates, phone numbers) -> remove them completely; do not hint at them.
 - Exact dates and clock times -> remove, or generalise if relevant ("during the morning shift").
 - Keep technical facts that matter for learning: weights, heights, distances, pressures, equipment types, job steps.
+- sensitive_terms: list every company/brand/organisation name, person name and ID or reference number that appears in the DESCRIPTION, exactly as written there. This list is only used by the app to check automatically that none of them reached the video; it is never shown. Do not include generic words such as "contractor".
 - anonymisation_notes: short generic notes on what kinds of details you removed ("Removed 2 personal names", "Removed a permit number"). Never repeat the removed details themselves. Write them in the output language. Empty list if nothing was removed.
 
 ## Rule 3 - Tone

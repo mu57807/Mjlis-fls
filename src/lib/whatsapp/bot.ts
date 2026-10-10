@@ -145,7 +145,13 @@ async function approve(from: string, projectId: string | undefined, fallbackLang
   const lang = p.language;
   if (p.status === "rendering") return void (await sendText(from, T.alreadyRendering[lang]));
   if (p.status === "done") return void (await sendText(from, T.alreadyDone[lang]));
-  const { error } = approveAndRender(p.id);
+  const { error, check } = await approveAndRender(p.id);
+  if (check && check.issues.length > 0) {
+    const lines = check.issues.slice(0, 8).map((i) => `• "${i.text}" (${i.where})`);
+    const link = process.env.APP_BASE_URL ? `\n\n${reviewUrl(p.id)}` : "";
+    await sendText(from, `${T.blocked[lang]}\n${lines.join("\n")}${link}`);
+    return;
+  }
   await sendText(from, error ? `${T.renderFailed[lang]} (${error})` : T.rendering[lang]);
 }
 

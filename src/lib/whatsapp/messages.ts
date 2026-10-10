@@ -65,6 +65,10 @@ export const T = {
     en: "✅ This video was already made. Send *status* to get it again.",
     ar: "✅ تم إنشاء هذا الفيديو مسبقاً. أرسل *الحالة* للحصول عليه مجدداً.",
   } satisfies Strings,
+  blocked: {
+    en: "⛔ The video was not made: the final check found a company name, an ID number or an unchecked picture. Please ask the HSE team to fix it on the review screen:",
+    ar: "⛔ لم يُنشأ الفيديو: وجد الفحص النهائي اسم شركة أو رقماً تعريفياً أو صورة لم تُراجع. يرجى من فريق السلامة تصحيحها في شاشة المراجعة:",
+  } satisfies Strings,
   renderFailed: {
     en: "❌ Sorry, the video could not be made. The HSE team can retry it from the web app.",
     ar: "❌ عذراً، تعذّر إنشاء الفيديو. يمكن لفريق السلامة إعادة المحاولة من الموقع.",

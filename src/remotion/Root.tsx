@@ -1,13 +1,14 @@
 import { Composition, type CalculateMetadataFunction } from "remotion";
 import { DEMO_STORYBOARDS } from "@/samples/demo-storyboards";
 import { buildTimeline, dimensions, FPS, type VideoProps } from "@/lib/video";
+import { completeStoryboard } from "@/lib/schema";
 import { LfiVideo } from "./LfiVideo";
 
 export const COMPOSITION_ID = "LfiVideo";
 
 const sample = DEMO_STORYBOARDS["dropped-object"].en;
 const defaultProps: VideoProps = {
-  storyboard: { ...sample, language: "en", scenes: sample.scenes.map((s, i) => ({ ...s, id: `s${i}` })) },
+  storyboard: completeStoryboard(sample, "en"),
   aspectRatio: "16:9",
   audio: null,
   audioBase: null,

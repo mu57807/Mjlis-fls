@@ -2,12 +2,12 @@
 // (LFI_DEMO_MODE=true), so the app can be tried without a Claude API key.
 // They show what a good Claude result looks like for each sample.
 
-import type { ClaudeStoryboard } from "@/lib/schema";
+import type { RawStoryboard } from "@/lib/schema";
 import type { SampleIncident } from "./incidents";
 
 type Lang = "en" | "ar";
 
-export const DEMO_STORYBOARDS: Record<SampleIncident["id"], Record<Lang, ClaudeStoryboard>> = {
+export const DEMO_STORYBOARDS: Record<SampleIncident["id"], Record<Lang, RawStoryboard>> = {
   "dropped-object": {
     en: {
       title: "Dropped Object: The Untethered Spanner",

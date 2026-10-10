@@ -1,14 +1,36 @@
 import "server-only";
+import fs from "node:fs";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AspectRatio, Language } from "./catalog";
-import type { Project } from "./schema";
-import { approveProject, claimRender, createProject, getProject } from "./db";
+import type { ComplianceResult, Media, Project } from "./schema";
+import type { ComplianceIssue } from "./compliance";
+import {
+  approveProject,
+  claimRender,
+  createProject,
+  getAlert,
+  getAlertBannedHashes,
+  getProject,
+  updateAlert,
+} from "./db";
 import { structureIncident } from "./claude/structure";
+import { buildAlertStoryboard } from "./claude/alert-storyboard";
+import { checkAlert } from "./alerts/check";
+import { alertDir, imagesDir } from "./storage";
+import { runFinalCheck } from "./final-check";
 import { startRenderWorker } from "./render/start";
+
+/** Thrown when the APP RULES check finds a company name, an ID or an unchecked picture. */
+export class ComplianceBlockedError extends Error {
+  constructor(public issues: ComplianceIssue[]) {
+    super(`Blocked: ${issues.length} problem(s) must be fixed first (company names, IDs or unchecked pictures).`);
+  }
+}
 
 /** Arabic if most letters in the text are Arabic, otherwise English. */
 export function detectLanguage(text: string): Language {
-  const arabic = (text.match(/[؀-ۿ]/g) ?? []).length;
+  const arabic = (text.match(/[\u0600-\u06FF]/g) ?? []).length;
   const latin = (text.match(/[A-Za-z]/g) ?? []).length;
   return arabic > latin ? "ar" : "en";
 }
@@ -38,7 +60,7 @@ export async function createFromIncident(input: {
     ),
   );
   const batchId = randomUUID();
-  return results.map(({ storyboard, demo }) =>
+  return results.map(({ storyboard, demo, bannedHashes }) =>
     createProject({
       batchId,
       aspectRatio: input.aspectRatio,
@@ -49,19 +71,92 @@ export async function createFromIncident(input: {
       origin: input.origin,
       originContact: input.originContact,
       callbackUrl: input.callbackUrl,
+      bannedHashes,
     }),
   );
 }
 
-/** Approve the saved storyboard (if still a draft) and start rendering it. */
-export function approveAndRender(id: string): { project: Project | null; error?: string } {
+/** Reviewed alert -> one draft project per output language, with its pictures. */
+export async function createFromAlert(
+  alertId: string,
+  opts: { outputLanguage: Language | "both" | "auto"; aspectRatio: AspectRatio; targetSeconds: 60 | 90 },
+): Promise<Project[]> {
+  const alert = getAlert(alertId);
+  if (!alert) throw new Error("Alert not found");
+  const hashes = getAlertBannedHashes(alertId);
+  // Names/IDs known to come from the file must be removed before a storyboard is made.
+  // Possible matches and flagged pictures are checked again (strictly) before rendering.
+  const issues = checkAlert(alert.fields, alert.pictures, hashes).filter((i) => !i.overridable);
+  if (issues.length) throw new ComplianceBlockedError(issues);
+
+  const used = alert.pictures.filter((p) => p.use);
+  const media: Media[] = used.map((p) => ({
+    file: p.file,
+    description: p.description,
+    flagged: p.flagged,
+    flag_reasons: p.flag_reasons,
+    checked: p.checked || !p.flagged,
+  }));
+  const languages: Language[] =
+    opts.outputLanguage === "both" ? ["en", "ar"] : opts.outputLanguage === "auto" ? [alert.documentLanguage] : [opts.outputLanguage];
+  const storyboards = await Promise.all(
+    languages.map((language) =>
+      buildAlertStoryboard({ fields: alert.fields, notes: alert.notes, language, targetSeconds: opts.targetSeconds, media }),
+    ),
+  );
+  const batchId = randomUUID();
+  const projects = storyboards.map((storyboard) => {
+    const project = createProject({
+      batchId,
+      aspectRatio: opts.aspectRatio,
+      targetSeconds: opts.targetSeconds,
+      // The reviewed, rule-checked fields (never the original file).
+      sourceText: JSON.stringify(alert.fields, null, 2),
+      storyboard,
+      demo: false,
+      origin: "web",
+      bannedHashes: hashes,
+      alertId,
+    });
+    const dir = imagesDir(project.id);
+    fs.mkdirSync(dir, { recursive: true });
+    for (const m of media) fs.copyFileSync(path.join(alertDir(alertId), "images", m.file), path.join(dir, m.file));
+    return project;
+  });
+  updateAlert(alertId, { projectIds: [...alert.projectIds, ...projects.map((p) => p.id)] });
+  return projects;
+}
+
+/**
+ * The final check, then the render. If a company name, ID or unchecked
+ * picture is found, nothing renders and the problems are returned.
+ */
+export async function renderIfCompliant(
+  id: string,
+): Promise<{ project: Project | null; error?: string; check?: ComplianceResult }> {
   const existing = getProject(id);
   if (!existing) return { project: null, error: "Not found" };
   if (existing.status === "rendering") return { project: existing };
-  if (existing.status === "draft") approveProject(id);
+  if (!existing.approvedAt) return { project: existing, error: "Approve the storyboard before rendering." };
+  const check = await runFinalCheck(existing);
+  if (check.issues.length > 0) {
+    return {
+      project: getProject(id),
+      check,
+      error: `Render blocked by the final check: ${check.issues.length} problem(s) found. Fix them on the review screen.`,
+    };
+  }
   if (!claimRender(id)) {
     return { project: getProject(id), error: `Cannot render a project that is ${existing.status}.` };
   }
   startRenderWorker(id);
-  return { project: getProject(id) };
+  return { project: getProject(id), check };
+}
+
+/** Approve the saved storyboard (if still a draft), run the final check and render. */
+export async function approveAndRender(id: string) {
+  const existing = getProject(id);
+  if (!existing) return { project: null, error: "Not found" };
+  if (existing.status === "draft") approveProject(id);
+  return renderIfCompliant(id);
 }

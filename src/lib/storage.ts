@@ -18,3 +18,13 @@ export function projectDir(projectId: string): string {
 export function audioDir(projectId: string): string {
   return path.join(projectDir(projectId), "audio");
 }
+
+export function imagesDir(projectId: string): string {
+  return path.join(projectDir(projectId), "images");
+}
+
+/** Folder for an uploaded alert's extracted pictures (the uploaded file itself is not kept). */
+export function alertDir(alertId: string): string {
+  if (!/^[0-9a-f-]{36}$/i.test(alertId)) throw new Error("Invalid alert id");
+  return path.join(dataDir(), "alerts", alertId);
+}

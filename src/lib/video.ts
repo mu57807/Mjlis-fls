@@ -41,6 +41,8 @@ export type VideoProps = {
    * the renderer passes null and the files are served as static files.
    */
   audioBase: string | null;
+  /** URL prefix for pictures (preview), or null/absent for static files (render). */
+  imageBase?: string | null;
 };
 
 export function dimensions(aspectRatio: AspectRatio) {

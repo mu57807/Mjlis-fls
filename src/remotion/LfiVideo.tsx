@@ -19,6 +19,7 @@ import {
   Checklist,
   ClosingCard,
   KeyLesson,
+  ReflectiveQuestions,
   RootCause,
   TitleCard,
   WhatHappened,
@@ -31,6 +32,8 @@ const TEMPLATES: Record<VisualType, React.FC<SceneProps>> = {
   root_cause: RootCause,
   key_lesson: KeyLesson,
   checklist: Checklist,
+  sustain: Checklist,
+  reflective_questions: ReflectiveQuestions,
   closing_card: ClosingCard,
 };
 
@@ -42,7 +45,14 @@ const MAX_ITEMS_PER_SCENE = 5;
  */
 function itemsForScene(sb: Storyboard, index: number): string[] {
   const type = sb.scenes[index].visual_type;
-  const list = type === "root_cause" ? sb.why_it_happened : type === "checklist" ? sb.actions : [];
+  const list =
+    type === "root_cause"
+      ? sb.why_it_happened
+      : type === "checklist" || type === "sustain"
+        ? sb.actions
+        : type === "reflective_questions"
+          ? (sb.reflective_questions ?? [])
+          : [];
   const items = list.map((s) => s.trim()).filter(Boolean);
   const sameType = sb.scenes.map((s, i) => (s.visual_type === type ? i : -1)).filter((i) => i >= 0);
   const k = sameType.indexOf(index);
@@ -80,6 +90,7 @@ function SceneRenderer({
         durationInFrames={timed.durationInFrames}
         progress={Math.min(1, (timed.from + frame) / totalFrames)}
         items={itemsForScene(storyboard, timed.index)}
+        imageSrc={(file) => (props.imageBase ? `${props.imageBase}${file}` : staticFile(`images/${file}`))}
       />
       <Subtitles cues={cues} wordTimes={wordTimes} lang={lang} />
       {timed.audio && (

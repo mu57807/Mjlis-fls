@@ -15,6 +15,7 @@ you download the MP4, a thumbnail and an `.srt` subtitle file.
 | 3 | Voiceover (ElevenLabs or Azure) with subtitles synced to the voice | ✅ |
 | 4 | MP4 render in the background, thumbnail, downloads | ✅ |
 | 5 | WhatsApp bot, API for other systems, web login | ✅ |
+| 6 | Upload an HSE Flash / LFI alert (PDF or PPTX), app rules, final check, blur tool | ✅ |
 
 ---
 
@@ -71,6 +72,57 @@ npm run render:sample -- ar 9:16        # Arabic, vertical
 ```
 
 ---
+
+## Making a video from an HSE Flash / LFI alert file
+
+On **New LFI**, choose **Upload alert file (PDF / PPTX)**. You can drag the file in or click to choose it (up to 20 MB). Typing
+the description is still available on the other tab.
+
+1. **Reading the file (30–90 s).** Claude reads the alert:
+   - **PDF:** the file itself is sent.
+   - **PPTX:** the slide text and pictures are sent.
+
+   Claude fills in the template fields:
+   - Header: date, time, incident title, risk category, injury / asset damaged, actual and potential severity,
+     activity and location
+   - What happened, findings, reflective questions, how to sustain the learning
+   - The key message
+
+   Pictures are taken out of the file (PPTX: `ppt/media`; PDF: the embedded images, or a picture of the page if
+   none can be extracted). Each one is classified as photo, diagram, logo, and so on.
+2. **Review screen.** Every field and picture can be edited:
+   - fix any text; an empty field means it was not in the file (nothing is invented)
+   - per picture: **Use in the video** (on/off), reorder, delete, **Blur…**, or confirm **I checked it**
+   - **Blur…**: drag boxes over logos, company names, number plates or IDs, then save. The boxed areas are
+     pixelated and blurred. **Undo blur** goes back.
+3. **Create storyboard.** Choose the language (the file's own, translated, or both), the format and the length. The
+   storyboard always follows this order:
+   title card (incident title, date, location, risk category, potential severity) → what happened (with the
+   incident photos) → why it happened → key message → how to sustain the learning → reflective questions →
+   closing card.
+4. Review, approve and render as usual.
+
+Try it with the fictional samples in `samples/alerts/` (`sample-lfi-alert.pdf` and `.pptx`). They contain fake
+company names, an "Ifadah#" number, a permit number, a logo and a vehicle plate, so you can see the rules at work.
+
+## The app rules (apply to every video)
+
+- **No company names**: no operator, contractor, subcontractor, client or brand names. Neutral roles are used
+  instead ("the contractor", "the operator", "the crew", "Vehicle A / Vehicle B").
+- **No incident IDs or reference numbers** of any kind (Ifadah#, report numbers, case IDs, permit numbers…). They
+  are not extracted, shown or spoken. The uploaded file is **not stored**. Names and IDs found in it are kept only
+  as one-way codes (hashes), which are used to recognise them if they appear again.
+- **No invented facts.** A missing field stays empty and is listed under "Missing information".
+- **Final check before every render** (uploads, typed descriptions, WhatsApp and the API):
+  1. names / IDs from the original file;
+  2. anything that looks like a reference number or company name;
+  3. pictures flagged as possibly showing a logo, name, plate or ID that nobody has checked or blurred;
+  4. Claude reads all the video's text once more.
+
+  If anything is found, **the render is blocked**: the problems are listed at the top of the review screen and the
+  scene is marked in red. Edit the text, then save and approve again. A false alarm can be dismissed with **Not a
+  company name or ID**, except for names and IDs that really appear in the original file, which must be edited out.
+- History never shows an uploaded alert's title while it still contains a name or ID from the file.
 
 ## Using it from WhatsApp
 
@@ -205,7 +257,11 @@ src/lib/                     the "engine", reusable by a future WhatsApp API
   tts/                         voice services (elevenlabs.ts, azure.ts; add more here)
   render/                      video rendering
   whatsapp/                    WhatsApp bot (client.ts, bot.ts, messages.ts = what the bot says)
-  pipeline.ts                  shared steps: incident → storyboard, approve → render
+  pipeline.ts                  shared steps: incident/alert → storyboard, final check → render
+  alerts/                      reading PDF/PPTX files and their pictures (read-files.ts, images.ts, process.ts)
+  compliance.ts                the app rules check (names, IDs, pictures)
+  final-check.ts               the check that runs before every render (adds Claude's reading)
+  claude/alert-prompts.ts      the instructions Claude follows for alert files
   notify.ts                    sends the finished video to WhatsApp / API callbacks
   video.ts                     scene and subtitle timing
   anonymise.ts                 local double-check for names and IDs
@@ -216,15 +272,17 @@ Dockerfile                   for running on a company server
 
 ## Important before company rollout
 
-1. **Remotion licence.** The video engine (Remotion) is free only for individuals and companies with
+1. **Check the automatic rules on your own alerts.** The checks catch a lot, but a person must still read every
+   storyboard and look at every picture before approving.
+2. **Remotion licence.** The video engine (Remotion) is free only for individuals and companies with
    up to 3 people. Your company needs a **Remotion Company License** (<https://remotion.dev/license>).
    Put the key in `REMOTION_LICENSE_KEY`.
-2. **Data leaving the building.** The original incident text goes to Claude (Anthropic), and the
+3. **Data leaving the building.** The original incident text goes to Claude (Anthropic), and the
    anonymised narration goes to ElevenLabs or Azure. Check this with your data-protection team. Azure can
    run inside your company's own Azure tenant.
    With WhatsApp, the incident text and the finished video also pass through Meta's WhatsApp Cloud API,
    which Meta hosts.
-3. **The original text** is stored in the local database so reviewers can compare against it. It is never
+4. **The original typed description** (not uploaded files) is stored in the local database so reviewers can compare against it. It is never
    put in a video.
 
 ## Running on a company server

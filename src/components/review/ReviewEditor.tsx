@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { CheckCircle2, Clapperboard, Plus, Save, Wand2 } from "lucide-react";
+import { CheckCircle2, Clapperboard, Plus, Save, ShieldAlert, ShieldCheck, Wand2 } from "lucide-react";
+import type { ComplianceIssue } from "@/lib/compliance";
+import type { Facts } from "@/lib/schema";
 import type { Project, Scene, Storyboard } from "@/lib/schema";
 import { checkStoryboard, fitDurations } from "@/lib/storyboard-checks";
 import { Choice, LANGUAGE_LABEL, OriginBadge, Panel, StatusPill } from "../ui";
@@ -35,6 +37,9 @@ export function ReviewEditor({ id }: { id: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  // Automatic part of the final check, re-run while editing.
+  const [ruleIssues, setRuleIssues] = useState<ComplianceIssue[]>([]);
+  const [checkRun, setCheckRun] = useState(0);
 
   const applyProject = useCallback((p: Project) => {
     setProject(p);
@@ -80,6 +85,20 @@ export function ReviewEditor({ id }: { id: string }) {
     return () => clearInterval(timer);
   }, [rendering, id]);
 
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!sb) return;
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    checkTimer.current = setTimeout(async () => {
+      const res = await fetch(`/api/projects/${id}/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storyboard: sb }),
+      });
+      if (res.ok) setRuleIssues((await res.json()).issues);
+    }, 500);
+  }, [sb, id, checkRun]);
+
   const report = useMemo(
     () => (sb && project ? checkStoryboard(sb, targetSeconds, project.sourceText) : null),
     [sb, project, targetSeconds],
@@ -119,6 +138,7 @@ export function ReviewEditor({ id }: { id: string }) {
       narration: "",
       caption: "",
       icons: [],
+      images: [],
       duration_seconds: 8,
     };
     // Insert before the closing card, if there is one at the end.
@@ -181,6 +201,11 @@ export function ReviewEditor({ id }: { id: string }) {
     try {
       const res = await fetch(`/api/projects/${id}/render`, { method: "POST" });
       const data = await res.json();
+      if (res.status === 409 && data.check) {
+        setProject(data.project);
+        setRuleIssues(data.check.issues.filter((i: ComplianceIssue) => i.source !== "ai"));
+        document.getElementById("final-check")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
       if (!res.ok) throw new Error(data.error || "Could not start the render.");
       setProject(data.project);
       document.getElementById("video")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -205,6 +230,39 @@ export function ReviewEditor({ id }: { id: string }) {
       setBusy(null);
     }
   }
+
+  async function acknowledge(keys: string[]) {
+    const res = await fetch(`/api/projects/${id}/acknowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys }),
+    });
+    if (res.ok) {
+      setProject((await res.json()).project);
+      setCheckRun((n) => n + 1);
+    }
+  }
+
+  // Problems that block the render: the automatic checks (live) plus Claude's
+  // findings from the last final check, minus confirmed false alarms.
+  const acked = new Set(project.compliance.acknowledged);
+  const aiIssues = (project.compliance.lastCheck?.issues ?? []).filter(
+    (i) => i.source === "ai" && !acked.has(i.key),
+  );
+  // One line per word and place, even when several checks found it.
+  const grouped = new Map<string, ComplianceIssue & { keys: string[] }>();
+  for (const i of [...ruleIssues, ...aiIssues]) {
+    const k = `${i.text.toLowerCase()}|${i.where}`;
+    const g = grouped.get(k);
+    if (!g) grouped.set(k, { ...i, keys: [i.key] });
+    else {
+      g.keys.push(i.key);
+      g.overridable = g.overridable && i.overridable;
+      if (!g.reason.includes(i.reason)) g.reason += `; ${i.reason}`;
+    }
+  }
+  const blockingIssues = [...grouped.values()];
+  const sceneProblems = (sceneId: string) => blockingIssues.filter((i) => i.sceneId === sceneId);
 
   const sceneWarnings = (sceneId: string) =>
     report.warnings.filter((w) => w.sceneId === sceneId).map((w) => w.message);
@@ -246,13 +304,64 @@ export function ReviewEditor({ id }: { id: string }) {
           aria-label="Video title"
           value={sb.title}
           onChange={(e) => update({ title: e.target.value })}
-          className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-2xl font-bold hover:border-slate-300 focus:border-brand focus:bg-surface focus:outline-none"
+          className={`w-full rounded-lg border px-2 py-1 text-2xl font-bold hover:border-slate-300 focus:border-brand focus:bg-surface focus:outline-none ${blockingIssues.some((i) => i.where === "Video title") ? "border-red-500 bg-red-50" : "border-transparent bg-transparent"}`}
         />
+      </div>
+
+      {/* ---------- Final check (APP RULES) ---------- */}
+      <div id="final-check">
+        {blockingIssues.length > 0 ? (
+          <Panel
+            tone="danger"
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldAlert size={16} /> Rendering is blocked: {blockingIssues.length} problem(s) to fix
+              </span>
+            }
+          >
+            <p className="mb-2">
+              Videos must never mention company names or incident / reference numbers, and flagged pictures must be
+              checked. Edit the highlighted places (scenes are marked in red), then save and approve again.
+            </p>
+            <ul className="space-y-1.5">
+              {blockingIssues.map((i) => (
+                <li key={`${i.key}|${i.where}`} className="flex flex-wrap items-baseline gap-x-2">
+                  <span>
+                    <b dir="auto" className="bg-red-200 px-1">{i.text}</b> in <i>{i.where}</i>{" "}
+                    <span className="text-muted">– {i.reason}</span>
+                  </span>
+                  {i.overridable && (
+                    <button
+                      type="button"
+                      onClick={() => acknowledge(i.keys)}
+                      className="rounded border border-red-300 bg-white px-2 py-0.5 text-xs hover:bg-red-100"
+                    >
+                      {i.kind === "image" ? "I checked: the picture is safe" : "Not a company name or ID"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {project.compliance.lastCheck && (
+              <p className="mt-2 text-xs text-muted">
+                Last full check: {new Date(project.compliance.lastCheck.checkedAt).toLocaleString()}
+                {project.compliance.lastCheck.aiChecked ? " (including Claude)" : " (automatic checks only)"}
+              </p>
+            )}
+          </Panel>
+        ) : (
+          <Panel tone="neutral" title={<span className="inline-flex items-center gap-1.5"><ShieldCheck size={16} /> Final check</span>}>
+            <p className="text-ok">
+              No company names, incident IDs or unchecked pictures found. Claude reads everything once more when you
+              click Render.
+            </p>
+          </Panel>
+        )}
       </div>
 
       {/* ---------- Checks ---------- */}
       <div className="grid gap-4 md:grid-cols-2">
-        {report.identifiers.length > 0 ? (
+        {project.alertId ? null : report.identifiers.length > 0 ? (
           <Panel tone="danger" title={`Check these possible identifying details (${report.identifiers.length})`}>
             <p className="mb-2 text-muted">
               An automatic check found text that might identify a person, company, place or ID.
@@ -399,6 +508,9 @@ export function ReviewEditor({ id }: { id: string }) {
             count={sb.scenes.length}
             language={lang}
             warnings={sceneWarnings(scene.id)}
+            problems={sceneProblems(scene.id)}
+            media={sb.media ?? []}
+            imageBase={`/api/projects/${id}/files/images/`}
             onChange={(patch) => updateScene(scene.id, patch)}
             onMove={(to) => moveScene(i, to)}
             onDelete={() => update({ scenes: sb.scenes.filter((s) => s.id !== scene.id) })}
@@ -444,7 +556,7 @@ export function ReviewEditor({ id }: { id: string }) {
       </section>
 
       {/* ---------- Summary (record) ---------- */}
-      <details className="rounded-xl border border-slate-200 bg-surface p-4">
+      <details open={sb.source === "alert"} className="rounded-xl border border-slate-200 bg-surface p-4">
         <summary className="cursor-pointer font-semibold">
           LFI summary <span className="font-normal text-muted">(for the record; the video uses the scenes above)</span>
         </summary>
@@ -478,19 +590,73 @@ export function ReviewEditor({ id }: { id: string }) {
             />
           </div>
           <ListEditor
-            label="Actions (what to do differently)"
+            label={sb.source === "alert" ? "How to sustain the learning (shown in the “sustain” scene)" : "Actions (what to do differently)"}
             items={sb.actions}
             onChange={(actions) => update({ actions })}
             dir={dir}
             lang={lang}
           />
+          {(sb.source === "alert" || (sb.reflective_questions ?? []).length > 0) && (
+            <ListEditor
+              label="Reflective questions for the team (shown in the “questions” scene)"
+              items={sb.reflective_questions ?? []}
+              onChange={(reflective_questions) => update({ reflective_questions })}
+              dir={dir}
+              lang={lang}
+            />
+          )}
+          {sb.facts && (
+            <div>
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+                Title card details (empty = not shown)
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    ["date", "Date"],
+                    ["time", "Time"],
+                    ["location", "Location"],
+                    ["risk_category", "Risk category"],
+                    ["potential_severity", "Potential severity"],
+                    ["actual_severity", "Actual severity"],
+                    ["activity", "Activity"],
+                    ["injury_or_asset_damaged", "Injury / asset damaged"],
+                  ] as [keyof Facts, string][]
+                ).map(([k, label]) => (
+                  <label key={k} className="text-xs">
+                    <span className="text-muted">{label}</span>
+                    <input
+                      dir={dir}
+                      lang={lang}
+                      value={sb.facts?.[k] ?? ""}
+                      onChange={(e) => update({ facts: { ...sb.facts!, [k]: e.target.value } })}
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </details>
 
       <details className="rounded-xl border border-slate-200 bg-surface p-4">
         <summary className="cursor-pointer font-semibold">
-          Original description <span className="font-normal text-muted">(not anonymised, never shown in the video)</span>
+          {project.alertId ? (
+            <>
+              Reviewed alert fields <span className="font-normal text-muted">(company names and IDs were removed from the file)</span>
+            </>
+          ) : (
+            <>
+              Original description <span className="font-normal text-muted">(not anonymised, never shown in the video)</span>
+            </>
+          )}
         </summary>
+        {project.alertId && (
+          <Link href={`/alerts/${project.alertId}`} className="mt-3 inline-block text-sm text-brand underline">
+            Open the alert review (fields and pictures)
+          </Link>
+        )}
         <p dir="auto" className="mt-3 whitespace-pre-wrap text-sm text-muted">
           {project.sourceText}
         </p>

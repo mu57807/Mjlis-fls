@@ -8,9 +8,32 @@ export const VISUAL_TYPES = [
   "root_cause",
   "key_lesson",
   "checklist",
+  "sustain",
+  "reflective_questions",
   "closing_card",
 ] as const;
 export type VisualType = (typeof VISUAL_TYPES)[number];
+
+/** Scene types for videos made from a typed description. */
+export const TEXT_VISUAL_TYPES = [
+  "title_card",
+  "what_happened",
+  "root_cause",
+  "key_lesson",
+  "checklist",
+  "closing_card",
+] as const satisfies readonly VisualType[];
+
+/** Scene order for videos made from an uploaded LFI alert file. */
+export const ALERT_SCENE_ORDER = [
+  "title_card",
+  "what_happened",
+  "root_cause",
+  "key_lesson",
+  "sustain",
+  "reflective_questions",
+  "closing_card",
+] as const satisfies readonly VisualType[];
 
 // Reserved for the future "AI-generated incident clip" feature. Not offered
 // to Claude or the editor yet; listed so the data model already has a slot.
@@ -22,6 +45,8 @@ export const VISUAL_TYPE_LABELS: Record<VisualType, { en: string; hint: string }
   root_cause: { en: "Root cause", hint: "Why it happened" },
   key_lesson: { en: "Key lesson", hint: "The one thing to remember, highlighted" },
   checklist: { en: "Do this instead", hint: "Checklist of actions" },
+  sustain: { en: "Sustain the learning", hint: "How to keep this learning alive at site" },
+  reflective_questions: { en: "Questions for the team", hint: "Reflective questions to discuss" },
   closing_card: { en: "Closing card", hint: "Logo and closing message" },
 };
 

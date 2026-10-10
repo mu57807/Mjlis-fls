@@ -33,7 +33,7 @@ const PATTERNS: { re: RegExp; reason: string }[] = [
   { re: /[\w.+-]+@[\w-]+\.[\w.-]+/g, reason: "Looks like an email address" },
   { re: /\+?\d[\d\s-]{7,}\d/g, reason: "Looks like a phone or ID number" },
   { re: /\b\d{4,}\b/g, reason: "Long number (could be an ID, permit or badge number)" },
-  { re: /[٠-٩۰-۹]{4,}/g, reason: "Long number (could be an ID, permit or badge number)" },
+  { re: /[\u0660-\u0669\u06F0-\u06F9]{4,}/g, reason: "Long number (could be an ID, permit or badge number)" },
   {
     re: /\b[A-Z]{1,6}[-/]?\d{1,}[A-Z0-9/-]*\b/g,
     reason: "Looks like a code (permit, work order, equipment tag or well/rig ID)",

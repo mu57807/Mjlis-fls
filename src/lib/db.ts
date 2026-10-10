@@ -2,7 +2,8 @@ import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { dataDir } from "./storage";
-import type { Project, ProjectStatus, ProjectSummary, Storyboard } from "./schema";
+import type { ComplianceResult, Project, ProjectStatus, ProjectSummary, Storyboard } from "./schema";
+import type { Alert } from "./alerts/types";
 import type { AudioManifest } from "./video";
 
 // One connection per server process (kept on globalThis so hot reload in
@@ -72,6 +73,23 @@ const MIGRATIONS: string[] = [
    ALTER TABLE projects ADD COLUMN callback_url TEXT;
    CREATE INDEX projects_contact ON projects(origin_contact, created_at DESC);
    CREATE TABLE inbound_messages (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);`,
+  `CREATE TABLE alerts (
+     id                TEXT PRIMARY KEY,
+     created_at        TEXT NOT NULL,
+     updated_at        TEXT NOT NULL,
+     file_type         TEXT NOT NULL,
+     document_language TEXT NOT NULL,
+     fields            TEXT NOT NULL,
+     pictures          TEXT NOT NULL,
+     notes             TEXT NOT NULL,
+     banned_hashes     TEXT NOT NULL,
+     project_ids       TEXT NOT NULL DEFAULT '[]'
+   );
+   CREATE INDEX alerts_created ON alerts(created_at DESC);
+   ALTER TABLE projects ADD COLUMN banned_hashes TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE projects ADD COLUMN compliance_ack TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE projects ADD COLUMN compliance_result TEXT;
+   ALTER TABLE projects ADD COLUMN alert_id TEXT;`,
 ];
 
 function migrate(conn: DatabaseSync) {
@@ -115,6 +133,10 @@ interface ProjectRow {
   origin: Project["origin"];
   origin_contact: string | null;
   callback_url: string | null;
+  banned_hashes: string;
+  compliance_ack: string;
+  compliance_result: string | null;
+  alert_id: string | null;
 }
 
 function toProject(r: ProjectRow): Project {
@@ -134,6 +156,11 @@ function toProject(r: ProjectRow): Project {
     origin: r.origin,
     originContact: r.origin_contact,
     callbackUrl: r.callback_url,
+    alertId: r.alert_id,
+    compliance: {
+      acknowledged: JSON.parse(r.compliance_ack) as string[],
+      lastCheck: r.compliance_result ? (JSON.parse(r.compliance_result) as ComplianceResult) : null,
+    },
     audio: r.audio_manifest ? (JSON.parse(r.audio_manifest) as AudioManifest) : null,
     render: {
       stage: r.render_stage,
@@ -158,6 +185,8 @@ export function createProject(input: {
   origin?: Project["origin"];
   originContact?: string | null;
   callbackUrl?: string | null;
+  bannedHashes?: string[];
+  alertId?: string | null;
 }): Project {
   const now = new Date().toISOString();
   const id = randomUUID();
@@ -165,8 +194,8 @@ export function createProject(input: {
     .prepare(
       `INSERT INTO projects (id, batch_id, created_at, updated_at, status, language,
          aspect_ratio, target_seconds, source_text, storyboard, approved_at, demo,
-         origin, origin_contact, callback_url)
-       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+         origin, origin_contact, callback_url, banned_hashes, alert_id)
+       VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -182,6 +211,8 @@ export function createProject(input: {
       input.origin ?? "web",
       input.originContact ?? null,
       input.callbackUrl ?? null,
+      JSON.stringify(input.bannedHashes ?? []),
+      input.alertId ?? null,
     );
   return getProject(id)!;
 }
@@ -227,6 +258,8 @@ export function listProjects(): ProjectSummary[] {
       origin: p.origin,
       originContact: p.originContact,
       callbackUrl: p.callbackUrl,
+      alertId: p.alertId,
+      compliance: p.compliance,
       title: p.storyboard.title,
       sceneCount: p.storyboard.scenes.length,
     };
@@ -350,4 +383,101 @@ export function markMessageSeen(messageId: string): boolean {
     .prepare(`INSERT OR IGNORE INTO inbound_messages (id, received_at) VALUES (?, ?)`)
     .run(messageId, new Date().toISOString());
   return res.changes > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Final check (APP RULES)
+// ---------------------------------------------------------------------------
+
+/** Hashes of names/IDs found in the source; never sent to the browser. */
+export function getBannedHashes(projectId: string): string[] {
+  const row = db().prepare(`SELECT banned_hashes FROM projects WHERE id = ?`).get(projectId) as
+    | { banned_hashes: string }
+    | undefined;
+  return row ? (JSON.parse(row.banned_hashes) as string[]) : [];
+}
+
+export function setComplianceResult(projectId: string, result: ComplianceResult) {
+  db().prepare(`UPDATE projects SET compliance_result = ? WHERE id = ?`).run(JSON.stringify(result), projectId);
+}
+
+/** A reviewer confirmed these findings are not a company name or ID (or the picture is safe). */
+export function acknowledgeIssues(projectId: string, keys: string[]) {
+  const p = getProject(projectId);
+  if (!p) return null;
+  const all = [...new Set([...p.compliance.acknowledged, ...keys])];
+  db().prepare(`UPDATE projects SET compliance_ack = ? WHERE id = ?`).run(JSON.stringify(all), projectId);
+  return getProject(projectId);
+}
+
+// ---------------------------------------------------------------------------
+// Uploaded alerts
+// ---------------------------------------------------------------------------
+
+interface AlertRow {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  file_type: Alert["fileType"];
+  document_language: Alert["documentLanguage"];
+  fields: string;
+  pictures: string;
+  notes: string;
+  banned_hashes: string;
+  project_ids: string;
+}
+
+function toAlert(r: AlertRow): Alert {
+  return {
+    id: r.id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    fileType: r.file_type,
+    documentLanguage: r.document_language,
+    fields: JSON.parse(r.fields),
+    pictures: JSON.parse(r.pictures),
+    notes: JSON.parse(r.notes),
+    projectIds: JSON.parse(r.project_ids),
+  };
+}
+
+export function createAlert(a: Omit<Alert, "createdAt" | "updatedAt" | "projectIds">, bannedHashes: string[]) {
+  const now = new Date().toISOString();
+  db()
+    .prepare(
+      `INSERT INTO alerts (id, created_at, updated_at, file_type, document_language, fields, pictures, notes, banned_hashes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(a.id, now, now, a.fileType, a.documentLanguage, JSON.stringify(a.fields), JSON.stringify(a.pictures),
+      JSON.stringify(a.notes), JSON.stringify(bannedHashes));
+  return getAlert(a.id)!;
+}
+
+export function getAlert(id: string): Alert | null {
+  const row = db().prepare(`SELECT * FROM alerts WHERE id = ?`).get(id) as unknown as AlertRow | undefined;
+  return row ? toAlert(row) : null;
+}
+
+export function getAlertBannedHashes(id: string): string[] {
+  const row = db().prepare(`SELECT banned_hashes FROM alerts WHERE id = ?`).get(id) as { banned_hashes: string } | undefined;
+  return row ? (JSON.parse(row.banned_hashes) as string[]) : [];
+}
+
+export function updateAlert(id: string, patch: Partial<Pick<Alert, "fields" | "pictures" | "projectIds">>) {
+  const a = getAlert(id);
+  if (!a) return null;
+  const next = { ...a, ...patch };
+  db()
+    .prepare(`UPDATE alerts SET fields = ?, pictures = ?, project_ids = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(next.fields), JSON.stringify(next.pictures), JSON.stringify(next.projectIds), new Date().toISOString(), id);
+  return getAlert(id);
+}
+
+export function listAlerts(limit = 50): Alert[] {
+  const rows = db().prepare(`SELECT * FROM alerts ORDER BY created_at DESC LIMIT ?`).all(limit) as unknown as AlertRow[];
+  return rows.map(toAlert);
+}
+
+export function deleteAlert(id: string): boolean {
+  return Number(db().prepare(`DELETE FROM alerts WHERE id = ?`).run(id).changes) > 0;
 }
