@@ -285,9 +285,45 @@ Dockerfile                   for running on a company server
 4. **The original typed description** (not uploaded files) is stored in the local database so reviewers can compare against it. It is never
    put in a video.
 
+## Put it online for a test group (Railway)
+
+[Railway](https://railway.com) runs the app on the internet with its own address. Your PC doesn't need to be on.
+It costs roughly $5–20 a month, depending on how many videos are rendered.
+
+1. **Sign up:** go to <https://railway.com> and click **Login → GitHub**. Choose the Hobby plan; it needs a payment card.
+2. **New project:** click **New Project → Deploy from GitHub repo**. Allow Railway to see your GitHub, then pick
+   **Mjlis-fls**.
+3. **Choose the branch:** click the new service, then open **Settings → Source → Branch** and pick
+   `claude/lfi-video-studio-ufaajq`.
+4. **Storage (important, or videos are lost on every update):** on the project canvas, right-click the
+   service (or press **⌘K / Ctrl K**), choose **Add Volume**, attach it to the service, and set the
+   **mount path** to `/app/data`.
+5. **Settings (Variables tab):** add
+   - `LFI_ADMIN_PASSWORD` = the password you will give your testers (required)
+   - `ANTHROPIC_API_KEY` = your Claude key
+   - `ELEVENLABS_API_KEY` = your ElevenLabs key, and `TTS_PROVIDER` = `elevenlabs`
+   - `LFI_DEMO_MODE` = `false`
+   - optional: `REMOTION_LICENSE_KEY`
+6. **Web address:** open **Settings → Networking → Generate Domain**. Copy the address (e.g.
+   `https://lfi-video-studio-production.up.railway.app`) and add it as the variable `APP_BASE_URL`.
+7. **Wait for the deploy:** watch **Deployments**. The first build takes about 5 minutes. When it shows
+   **Active**, open the address and log in.
+8. **Invite testers:** send them the address and the password. They can use it from a computer or a phone.
+
+Good to know:
+- **Updates are automatic:** every time new code is pushed to the branch, Railway rebuilds and restarts the app.
+  The database and videos are kept on the volume.
+- **Everyone shares one space:** all testers log in with the same password and see the same History.
+- **Costs:** every storyboard uses Claude, and every voiceover uses ElevenLabs. Set spending limits in the
+  Anthropic console and in ElevenLabs before you invite people.
+- **Data:** the app now runs on Railway's servers. Ask testers to use the sample files or alerts that have
+  already been cleared for sharing until your company has approved it.
+- Railway checks the app is running at `/api/health`.
+
 ## Running on a company server
 
-The included `Dockerfile` is a starting point. It hasn't been tested on your infrastructure yet.
+The same `Dockerfile` works on any server that runs Docker. It was tested by building the image and rendering a
+video inside the container.
 
 ```bash
 docker build -t lfi-video-studio .

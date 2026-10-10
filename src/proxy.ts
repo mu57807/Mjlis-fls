@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, isValidSession, passwordConfigured } from "@/lib/auth";
 
 // Endpoints that check their own credentials (signature, API key or signed link).
-const PUBLIC_PREFIXES = ["/login", "/api/auth/", "/api/whatsapp/", "/api/v1/", "/api/share/"];
+const PUBLIC_PREFIXES = ["/login", "/api/auth/", "/api/whatsapp/", "/api/v1/", "/api/share/", "/api/health"];
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]", "::ffff:127.0.0.1"]);
 
