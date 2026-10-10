@@ -1,5 +1,5 @@
-import Database from "better-sqlite3";
 import path from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { dataDir } from "./storage";
 import type { Project, ProjectStatus, ProjectSummary, Storyboard } from "./schema";
@@ -7,13 +7,32 @@ import type { AudioManifest } from "./video";
 
 // One connection per server process (kept on globalThis so hot reload in
 // development does not open a new one on every code change).
-const g = globalThis as unknown as { __lfiDb?: Database.Database };
+const g = globalThis as unknown as { __lfiDb?: DatabaseSync };
 
-function db(): Database.Database {
+/**
+ * Node's built-in SQLite (Node 22.13+), so there is nothing to compile on
+ * install. Loaded on first use, hiding Node's one-off "experimental" notice.
+ */
+function loadSqlite(): typeof import("node:sqlite") {
+  const original = process.emitWarning;
+  process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
+    const text = typeof warning === "string" ? warning : warning.message;
+    if (/SQLite is an experimental feature/.test(text)) return;
+    return (original as (...a: unknown[]) => void).call(process, warning, ...rest);
+  }) as typeof process.emitWarning;
+  try {
+    return process.getBuiltinModule("node:sqlite");
+  } finally {
+    process.emitWarning = original;
+  }
+}
+
+function db(): DatabaseSync {
   if (!g.__lfiDb) {
-    const conn = new Database(path.join(dataDir(), "lfi.db"));
-    conn.pragma("journal_mode = WAL");
-    conn.pragma("foreign_keys = ON");
+    const { DatabaseSync } = loadSqlite();
+    const conn = new DatabaseSync(path.join(dataDir(), "lfi.db"));
+    // Lets the web app and the render worker use the database at the same time.
+    conn.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;");
     migrate(conn);
     g.__lfiDb = conn;
   }
@@ -55,13 +74,18 @@ const MIGRATIONS: string[] = [
    CREATE TABLE inbound_messages (id TEXT PRIMARY KEY, received_at TEXT NOT NULL);`,
 ];
 
-function migrate(conn: Database.Database) {
-  const version = conn.pragma("user_version", { simple: true }) as number;
+function migrate(conn: DatabaseSync) {
+  const version = Number((conn.prepare("PRAGMA user_version").get() as { user_version: number }).user_version);
   for (let v = version; v < MIGRATIONS.length; v++) {
-    conn.transaction(() => {
+    conn.exec("BEGIN");
+    try {
       conn.exec(MIGRATIONS[v]);
-      conn.pragma(`user_version = ${v + 1}`);
-    })();
+      conn.exec(`PRAGMA user_version = ${v + 1}`);
+      conn.exec("COMMIT");
+    } catch (err) {
+      conn.exec("ROLLBACK");
+      throw err;
+    }
   }
 }
 
@@ -185,7 +209,7 @@ function isAlive(pid: number): boolean {
 export function listProjects(): ProjectSummary[] {
   const rows = db()
     .prepare(`SELECT * FROM projects ORDER BY created_at DESC LIMIT 500`)
-    .all() as ProjectRow[];
+    .all() as unknown as ProjectRow[];
   return rows.map((r) => {
     const p = toProject(r);
     return {
@@ -313,7 +337,7 @@ export function failRender(id: string, error: string) {
 export function projectsForContact(contact: string, limit = 5): Project[] {
   const rows = db()
     .prepare(`SELECT * FROM projects WHERE origin_contact = ? ORDER BY created_at DESC LIMIT ?`)
-    .all(contact, limit) as ProjectRow[];
+    .all(contact, limit) as unknown as ProjectRow[];
   return rows.map(toProject);
 }
 

@@ -20,7 +20,7 @@ you download the MP4, a thumbnail and an `.srt` subtitle file.
 
 ## 1. One-time setup
 
-1. Install **Node.js 20 or newer** (LTS) from <https://nodejs.org>.
+1. Install **Node.js 22.13 or newer** (the LTS version) from <https://nodejs.org>. Nothing needs to be compiled: the database uses SQLite built into Node, so Python or Visual Studio are not needed.
 2. Open a terminal in this folder and run `npm install`.
 3. Copy the settings file:
    `cp .env.example .env.local` (Windows: `copy .env.example .env.local`)

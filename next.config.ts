@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Node-only packages; load them at runtime instead of bundling them.
-  serverExternalPackages: ["better-sqlite3", "microsoft-cognitiveservices-speech-sdk"],
+  serverExternalPackages: ["microsoft-cognitiveservices-speech-sdk"],
   turbopack: {
     rules: {
       "*.css": {
