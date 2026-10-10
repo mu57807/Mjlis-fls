@@ -65,7 +65,10 @@ export function splitMessage(body: string, max = TWILIO_MAX_BODY): string[] {
     let rest = line;
     while (rest.length > max) {
       const cut = rest.lastIndexOf(" ", max) > max / 2 ? rest.lastIndexOf(" ", max) : max;
-      if (current) parts.push(current), (current = "");
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
       parts.push(rest.slice(0, cut));
       rest = rest.slice(cut).trimStart();
     }
