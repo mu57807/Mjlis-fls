@@ -23,7 +23,7 @@ export function proxy(req: NextRequest) {
   if (!passwordConfigured()) {
     if (isLocalRequest(req)) return NextResponse.next();
     return new NextResponse(
-      "LFI Video Studio: to open the app from another device, set LFI_ADMIN_PASSWORD in .env.local and restart.",
+      "LFI Video Studio is locked: no password is set yet.\n\nOn Railway or another hosting service: add the variable LFI_ADMIN_PASSWORD in the service settings (Variables) and redeploy.\nOn your own computer: add LFI_ADMIN_PASSWORD to .env.local and restart the app.",
       { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } },
     );
   }
