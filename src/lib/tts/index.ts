@@ -1,3 +1,4 @@
+import { envKey } from "../env";
 import { azureProvider } from "./azure";
 import { elevenLabsProvider } from "./elevenlabs";
 import { TtsError, type TtsProvider } from "./types";
@@ -13,18 +14,18 @@ export type { TtsProvider };
 export function getTtsProvider(): TtsProvider | null {
   const choice =
     process.env.TTS_PROVIDER ||
-    (process.env.ELEVENLABS_API_KEY ? "elevenlabs" : process.env.AZURE_SPEECH_KEY ? "azure" : "none");
+    (envKey("ELEVENLABS_API_KEY") ? "elevenlabs" : envKey("AZURE_SPEECH_KEY") ? "azure" : "none");
 
   switch (choice) {
     case "none":
       return null;
     case "elevenlabs": {
-      const key = process.env.ELEVENLABS_API_KEY;
+      const key = envKey("ELEVENLABS_API_KEY");
       if (!key) throw new TtsError("TTS_PROVIDER is elevenlabs but ELEVENLABS_API_KEY is empty.");
       return elevenLabsProvider(key);
     }
     case "azure": {
-      const key = process.env.AZURE_SPEECH_KEY;
+      const key = envKey("AZURE_SPEECH_KEY");
       const region = process.env.AZURE_SPEECH_REGION;
       if (!key || !region) {
         throw new TtsError("TTS_PROVIDER is azure but AZURE_SPEECH_KEY or AZURE_SPEECH_REGION is empty.");

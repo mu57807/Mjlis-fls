@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
+import { envKey } from "../env";
 
 /** An error whose message is safe and helpful to show to the user. */
 export class StructuringError extends Error {}
@@ -14,18 +15,30 @@ export function isDemoMode(): boolean {
 }
 
 export function claudeAvailable(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY) && !isDemoMode();
+  return Boolean(envKey("ANTHROPIC_API_KEY")) && !isDemoMode();
 }
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = envKey("ANTHROPIC_API_KEY");
+  if (!apiKey) {
     throw new StructuringError(
-      "No Claude API key is set. Add ANTHROPIC_API_KEY to the .env.local file and restart the app, or set LFI_DEMO_MODE=true to try the built-in samples.",
+      "No Claude API key is set. Add ANTHROPIC_API_KEY (in .env.local on your computer, or in Variables on your hosting service) and restart the app, or set LFI_DEMO_MODE=true to try the built-in samples.",
     );
   }
-  client ??= new Anthropic();
+  client ??= new Anthropic({ apiKey });
   return client;
+}
+
+/** Explain a rejected key without revealing it. */
+function keyProblem(): string {
+  const key = envKey("ANTHROPIC_API_KEY") ?? "";
+  const where =
+    "Check ANTHROPIC_API_KEY (in .env.local on your computer, or in Variables on your hosting service, then redeploy).";
+  if (!key.startsWith("sk-ant-")) {
+    return `Claude rejected the API key: it does not look like a Claude API key (those start with "sk-ant-"). ${where}`;
+  }
+  return `Claude rejected the API key (it is ${key.length} characters long and ends in "${key.slice(-4)}"). It may be mistyped, cut short, or deleted in the Claude Console. ${where}`;
 }
 
 export type ClaudeContent = string | Anthropic.Beta.Messages.BetaContentBlockParam[];
@@ -60,7 +73,7 @@ export async function askClaude<S extends z.ZodType>(opts: {
     });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
-      throw new StructuringError("Claude rejected the API key. Check ANTHROPIC_API_KEY in .env.local.");
+      throw new StructuringError(keyProblem());
     }
     if (err instanceof Anthropic.RateLimitError) {
       throw new StructuringError("Claude is receiving too many requests right now. Wait a minute and try again.");
