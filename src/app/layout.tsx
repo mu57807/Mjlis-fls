@@ -53,6 +53,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/history" className="rounded px-3 py-1.5 hover:bg-white/10">
                 History
               </Link>
+              <Link href="/names" className="rounded px-3 py-1.5 hover:bg-white/10">
+                Names list
+              </Link>
               {passwordConfigured() && <LogoutButton />}
             </nav>
           </div>

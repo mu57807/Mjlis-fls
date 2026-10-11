@@ -320,8 +320,8 @@ export function ReviewEditor({ id }: { id: string }) {
             }
           >
             <p className="mb-2">
-              Videos must never mention company names or incident / reference numbers, and flagged pictures must be
-              checked. Edit the highlighted places (scenes are marked in red), then save and approve again.
+              Videos must never mention company names, people&apos;s names, exact locations or incident / reference
+              numbers, and flagged pictures must be checked. Edit the highlighted places (scenes are marked in red), then save and approve again.
             </p>
             <ul className="space-y-1.5">
               {blockingIssues.map((i) => (
@@ -336,7 +336,13 @@ export function ReviewEditor({ id }: { id: string }) {
                       onClick={() => acknowledge(i.keys)}
                       className="rounded border border-red-300 bg-white px-2 py-0.5 text-xs hover:bg-red-100"
                     >
-                      {i.kind === "image" ? "I checked: the picture is safe" : "Not a company name or ID"}
+                      {i.kind === "image"
+                        ? "I checked: the picture is safe"
+                        : i.kind === "person"
+                          ? "Not a person's name"
+                          : i.kind === "location"
+                            ? "Not an exact location"
+                            : "Not a company name or ID"}
                     </button>
                   )}
                 </li>
@@ -352,8 +358,8 @@ export function ReviewEditor({ id }: { id: string }) {
         ) : (
           <Panel tone="neutral" title={<span className="inline-flex items-center gap-1.5"><ShieldCheck size={16} /> Final check</span>}>
             <p className="text-ok">
-              No company names, incident IDs or unchecked pictures found. Claude reads everything once more when you
-              click Render.
+              No company, person or place names, incident IDs or unchecked pictures found. Claude reads everything
+              once more when you click Render.
             </p>
           </Panel>
         )}

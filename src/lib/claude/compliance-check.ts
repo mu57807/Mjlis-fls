@@ -10,13 +10,13 @@ const FindingsSchema = z.object({
     z.object({
       item: z.number().describe("Number of the text in the list."),
       text: z.string().describe("The exact words that break the rule."),
-      kind: z.enum(["company", "id"]),
+      kind: z.enum(["company", "id", "person", "location"]),
       reason: z.string(),
     }),
   ),
 });
 
-/** Claude reads every final text once more for company names and IDs. */
+/** Claude reads every final text once more for company names, IDs, people's names and exact locations. */
 export async function aiComplianceCheck(texts: CheckedText[]): Promise<{ issues: ComplianceIssue[]; ran: boolean }> {
   if (!claudeAvailable() || texts.length === 0) return { issues: [], ran: false };
   const list = texts.map((t, i) => `${i + 1}. [${t.where}] ${t.text}`).join("\n");

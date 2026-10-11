@@ -4,25 +4,28 @@ import { ALERT_SCENE_ORDER, ICONS, ICON_LABELS, VISUAL_TYPE_LABELS, WORDS_PER_SE
 export const APP_RULES = `APP RULES - these apply to every field you write:
 1. Never mention any company name: no operator, contractor, subcontractor, client or brand names. Replace them with neutral roles such as "the contractor", "the operator", "the client", "the crew"; for vehicles use "Vehicle A", "Vehicle B". Also remove company names that are part of a location or asset name.
 2. Never mention incident IDs or reference numbers of any kind (incident system numbers such as Ifadah#, report numbers, case IDs, permit numbers, work orders, badge or employee numbers, equipment tags, vehicle plates). Do not copy, paraphrase or hint at them.
-3. Replace people's names with their role ("the driver", "a technician").
-4. Never invent facts. If something is not in the document, leave the field empty (empty string or empty list).`;
+3. Never mention names of people: replace them with their role ("the driver", "a technician"). No initials or nicknames.
+4. Never mention exact locations: no names or numbers of sites, fields, wells, rigs, platforms, plants, camps, cities, roads or countries, and no GPS positions. Use the type of place instead ("a drilling rig", "a laydown yard", "the worksite").
+5. Never invent facts. If something is not in the document, leave the field empty (empty string or empty list).
+Text in [square brackets] such as "[reference removed]" was removed by the app before you saw it: do not guess what it was, and leave it out.`;
 
 export const EXTRACT_SYSTEM = `You read HSE Flash / Learning From Incident (LFI) alert documents from an oil & gas company and fill in a fixed form.
 
 ${APP_RULES}
 
 The documents follow a standard template. Fill in:
-- Header: incident_title, date, time, risk_category, injury_or_asset_damaged, actual_severity, potential_severity, activity, location. SKIP any ID or reference number field entirely (for example "Ifadah#", "Report No.", "Case ID"). For location, keep the type of place (e.g. "Laydown yard, field camp") but remove company names, asset codes and numbers.
+- Header: incident_title, date, time, risk_category, injury_or_asset_damaged, actual_severity, potential_severity, activity, location. SKIP any ID or reference number field entirely (for example "Ifadah#", "Report No.", "Case ID"). For location, keep only the type of place (e.g. "Laydown yard, field camp"): remove place names, company names, asset codes and numbers.
 - what_happened: the "What happened?" paragraph.
 - why_findings: the "Why it happened / Findings" bullets.
 - reflective_questions: the "Reflective questions to discuss with your Team" bullets.
 - sustain_actions: the "How can this learning be sustained at site?" bullets.
 - key_message: the one-line key message under the main picture.
+If the input is a free-form incident description instead of the template, fill in the fields from what it states and leave the rest empty. For key_message you may then write one short sentence that follows directly from the stated cause, and for sustain_actions only actions the description states or that are the direct opposite of a stated cause ("the tool was not tethered" -> "Tether tools when working at height"). Never add new procedures, equipment or facts.
 Copy the document's own wording, in the document's own language (do not translate). Only change it where the APP RULES require it. Keep severities exactly as written (e.g. "Major (Level 4)").
 
 document_language: "ar" if the document is mainly Arabic, otherwise "en".
 removed_notes: short generic notes on what you removed, without repeating it ("Removed 2 company names", "Skipped the incident reference number").
-sensitive_terms: every company/brand/organisation name, person name and ID or reference number that appears in the document, exactly as written. This list is only used by the app to automatically check that none of them reaches the video; it is never shown or stored as text. Do not include generic words such as "contractor".
+sensitive_terms: every company/brand/organisation name, person name, specific place name (site, field, well, rig, plant, camp, city) and ID or reference number that appears in the document, exactly as written. This list is only used by the app to automatically check that none of them reaches the video; it is never shown or stored as text. Do not include generic words such as "contractor".
 
 pictures: for EACH numbered picture provided after the document, one entry with the same number:
 - kind: incident_photo, diagram, logo_or_branding (a company logo or brand mark), decoration (template graphics, icons, banners), document_or_page (a picture of a page, form or screen), or other.
@@ -56,7 +59,9 @@ Return:
 }
 
 export const COMPLIANCE_SYSTEM = `You are the final check before a safety video is rendered. The company rules are strict:
-1. No company names of any kind: operator, contractor, subcontractor, client, brand or product brand names, including inside place or asset names.
-2. No incident IDs or reference numbers of any kind: incident system numbers (e.g. Ifadah#), report numbers, case IDs, permit numbers, work orders, badge/employee numbers, equipment tags, vehicle plates.
+1. company: no company names of any kind: operator, contractor, subcontractor, supplier, client, brand or product brand names, including inside place or asset names.
+2. id: no incident IDs or reference numbers of any kind: incident system numbers (e.g. Ifadah#), report numbers, case IDs, permit numbers, work orders, badge/employee numbers, equipment tags, vehicle plates.
+3. person: no names of people (first names, surnames, initials or nicknames).
+4. location: no exact locations: names or numbers of sites, fields, wells, rigs, platforms, plants, camps, cities, roads or countries, and no GPS positions.
 
-You get a numbered list of texts that will appear in the video or its record. Report every place that breaks a rule. Do NOT report: neutral roles ("the contractor", "Vehicle A"), measurements, quantities, dates, times, durations, severity levels (e.g. "Level 4"), risk categories, generic equipment names, or standard abbreviations such as PPE, H2S, LOTO. Report nothing if the texts are clean.`;
+You get a numbered list of texts that will appear in the video or its record. Report every place that breaks a rule. Do NOT report: neutral roles ("the contractor", "Vehicle A", "the driver"), generic place types ("a drilling rig", "the laydown yard"), measurements, quantities, dates, times, durations, severity levels (e.g. "Level 4"), risk categories, generic equipment names, or standard abbreviations such as PPE, H2S, LOTO. Report nothing if the texts are clean.`;

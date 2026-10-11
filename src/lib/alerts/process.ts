@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { alertDir } from "../storage";
-import { createAlert } from "../db";
+import { createAlert, listKnownNames } from "../db";
+import { redactLocally } from "../redact";
 import { hashTerms, scanSourceForSensitiveTerms } from "../compliance";
 import { StructuringError } from "../claude/client";
 import { extractAlert } from "../claude/extract-alert";
@@ -29,10 +30,18 @@ export async function processUpload(file: Buffer, fileName: string): Promise<Ale
     throw new StructuringError(`The ${type.toUpperCase()} file could not be read. Is it damaged or password-protected?`);
   }
   const { pictures: prepared, skipped } = await preparePictures(contents.pictures);
-  const ex = await extractAlert(file, contents, prepared);
+
+  // The local clean-up runs before anything is sent to Claude. A scanned PDF
+  // has no text to clean, so only then is the file itself sent.
+  const clean = redactLocally(contents.text, listKnownNames());
+  const scanned = type === "pdf" && !hasTextLayer(contents.text);
+  const ex = await extractAlert(
+    scanned ? { kind: "scanned_pdf", file } : { kind: "text", text: clean.text, source: type },
+    prepared,
+  );
 
   // Names and IDs from the file: kept only as hashes for the final check.
-  const bannedHashes = hashTerms([...ex.sensitive_terms, ...scanSourceForSensitiveTerms(contents.text)]);
+  const bannedHashes = hashTerms([...ex.sensitive_terms, ...clean.removed, ...scanSourceForSensitiveTerms(contents.text)]);
 
   const id = randomUUID();
   const dir = path.join(alertDir(id), "images");
@@ -64,11 +73,43 @@ export async function processUpload(file: Buffer, fileName: string): Promise<Ale
     };
   });
 
-  const notes = [...ex.removed_notes];
+  const notes = [
+    ...(scanned
+      ? ["This PDF is scanned (no readable text), so the local clean-up could not read it and Claude read the file itself."]
+      : clean.notes),
+    ...ex.removed_notes,
+  ];
   const unreadable = skipped + contents.skipped;
   if (unreadable > 0) notes.push(`${unreadable} picture(s) could not be read (unsupported format).`);
 
   // Keep only the form fields (the schema drops everything else, incl. the sensitive terms).
   const fields = AlertFieldsSchema.parse(ex);
   return createAlert({ id, fileType: type, documentLanguage: ex.document_language, fields, pictures, notes }, bannedHashes);
+}
+
+/** A PDF made on a computer has a text layer; a scanned one has (almost) none. */
+function hasTextLayer(text: string): boolean {
+  return (text.replace(/--- Page \d+ ---/g, "").match(/[\p{L}\p{N}]/gu) ?? []).length >= 150;
+}
+
+/**
+ * Typed incident description -> the same reviewable facts as an uploaded alert.
+ * The text is cleaned locally first; the original text is never stored.
+ */
+export async function processText(description: string): Promise<Alert> {
+  const clean = redactLocally(description, listKnownNames());
+  const ex = await extractAlert({ kind: "text", text: clean.text, source: "typed" }, []);
+  const bannedHashes = hashTerms([...ex.sensitive_terms, ...clean.removed, ...scanSourceForSensitiveTerms(description)]);
+  const fields = AlertFieldsSchema.parse(ex);
+  return createAlert(
+    {
+      id: randomUUID(),
+      fileType: "text",
+      documentLanguage: ex.document_language,
+      fields,
+      pictures: [],
+      notes: [...clean.notes, ...ex.removed_notes],
+    },
+    bannedHashes,
+  );
 }

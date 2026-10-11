@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { dataDir } from "./storage";
 import type { ComplianceResult, Project, ProjectStatus, ProjectSummary, Storyboard } from "./schema";
 import type { Alert } from "./alerts/types";
+import { hashTerms } from "./compliance";
+import type { KnownName, KnownNameKind } from "./known-names";
 import type { AudioManifest } from "./video";
 
 // One connection per server process (kept on globalThis so hot reload in
@@ -90,6 +92,14 @@ const MIGRATIONS: string[] = [
    ALTER TABLE projects ADD COLUMN compliance_ack TEXT NOT NULL DEFAULT '[]';
    ALTER TABLE projects ADD COLUMN compliance_result TEXT;
    ALTER TABLE projects ADD COLUMN alert_id TEXT;`,
+  // Names the local clean-up removes before anything is sent to Claude.
+  `CREATE TABLE known_names (
+     id          TEXT PRIMARY KEY,
+     created_at  TEXT NOT NULL,
+     term        TEXT NOT NULL,
+     kind        TEXT NOT NULL,
+     replacement TEXT NOT NULL
+   );`,
 ];
 
 function migrate(conn: DatabaseSync) {
@@ -390,11 +400,12 @@ export function markMessageSeen(messageId: string): boolean {
 // ---------------------------------------------------------------------------
 
 /** Hashes of names/IDs found in the source; never sent to the browser. */
+/** Hashes of the names/IDs from the project's source, plus everything on the names list. */
 export function getBannedHashes(projectId: string): string[] {
   const row = db().prepare(`SELECT banned_hashes FROM projects WHERE id = ?`).get(projectId) as
     | { banned_hashes: string }
     | undefined;
-  return row ? (JSON.parse(row.banned_hashes) as string[]) : [];
+  return [...(row ? (JSON.parse(row.banned_hashes) as string[]) : []), ...knownNameHashes()];
 }
 
 export function setComplianceResult(projectId: string, result: ComplianceResult) {
@@ -460,7 +471,7 @@ export function getAlert(id: string): Alert | null {
 
 export function getAlertBannedHashes(id: string): string[] {
   const row = db().prepare(`SELECT banned_hashes FROM alerts WHERE id = ?`).get(id) as { banned_hashes: string } | undefined;
-  return row ? (JSON.parse(row.banned_hashes) as string[]) : [];
+  return [...(row ? (JSON.parse(row.banned_hashes) as string[]) : []), ...knownNameHashes()];
 }
 
 export function updateAlert(id: string, patch: Partial<Pick<Alert, "fields" | "pictures" | "projectIds">>) {
@@ -480,4 +491,33 @@ export function listAlerts(limit = 50): Alert[] {
 
 export function deleteAlert(id: string): boolean {
   return Number(db().prepare(`DELETE FROM alerts WHERE id = ?`).run(id).changes) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Known names (company, person and place names to remove locally)
+// ---------------------------------------------------------------------------
+
+let knownCache: { key: string; hashes: string[] } | null = null;
+/** Every name on the list is checked for, in every project, old and new. */
+export function knownNameHashes(): string[] {
+  const terms = listKnownNames().map((n) => n.term);
+  const key = terms.join("\n");
+  if (knownCache?.key !== key) knownCache = { key, hashes: hashTerms(terms) };
+  return knownCache.hashes;
+}
+
+export function listKnownNames(): KnownName[] {
+  return db().prepare(`SELECT id, term, kind, replacement FROM known_names ORDER BY term COLLATE NOCASE`).all() as unknown as KnownName[];
+}
+
+export function addKnownName(n: { term: string; kind: KnownNameKind; replacement: string }): KnownName {
+  const id = randomUUID();
+  db()
+    .prepare(`INSERT INTO known_names (id, created_at, term, kind, replacement) VALUES (?, ?, ?, ?, ?)`)
+    .run(id, new Date().toISOString(), n.term, n.kind, n.replacement);
+  return { id, ...n };
+}
+
+export function deleteKnownName(id: string): boolean {
+  return Number(db().prepare(`DELETE FROM known_names WHERE id = ?`).run(id).changes) > 0;
 }

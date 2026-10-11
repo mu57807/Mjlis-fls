@@ -187,7 +187,9 @@ export function AlertReview({ id }: { id: string }) {
           ← History
         </Link>
         <span className="text-slate-300">|</span>
-        <span className="font-semibold">Review the uploaded alert ({alert.fileType.toUpperCase()})</span>
+        <span className="font-semibold">
+          {alert.fileType === "text" ? "Review the incident facts (typed description)" : `Review the uploaded alert (${alert.fileType.toUpperCase()})`}
+        </span>
       </div>
       <h1 dir={dir} className="text-2xl font-bold">
         {fields.incident_title || "Untitled alert"}
@@ -204,9 +206,10 @@ export function AlertReview({ id }: { id: string }) {
           }
         >
           <p className="mb-2">
-            Company names and incident / reference numbers must never appear, and flagged pictures must be blurred,
-            removed or confirmed. The places are highlighted below. Names and IDs found in the original file must be
-            removed now; everything else is checked again before the video is rendered.
+            Company names, people&apos;s names, exact locations and incident / reference numbers must never appear, and
+            flagged pictures must be blurred, removed or confirmed. The places are highlighted below. Names and IDs
+            found in the original or on your names list must be removed now; everything else is checked again before
+            the video is rendered.
           </p>
           <ul className="space-y-0.5">
             {issues.map((i) => (
@@ -219,11 +222,11 @@ export function AlertReview({ id }: { id: string }) {
         </Panel>
       ) : (
         <Panel tone="neutral" title="Rule check">
-          <p className="text-ok">No company names, IDs or unchecked pictures found. Please still read everything.</p>
+          <p className="text-ok">No company, person or place names, IDs or unchecked pictures found. Please still read everything.</p>
         </Panel>
       )}
       {alert.notes.length > 0 && (
-        <Panel tone="neutral" title="Removed while reading the file">
+        <Panel tone="neutral" title="Removed before the facts were made">
           <ul className="list-disc ps-5 text-muted">
             {alert.notes.map((n) => (
               <li key={n}>{n}</li>
@@ -242,7 +245,7 @@ export function AlertReview({ id }: { id: string }) {
               <input
                 dir="auto"
                 value={fields[k]}
-                placeholder="Not in the file"
+                placeholder={alert.fileType === "text" ? "Not stated" : "Not in the file"}
                 onChange={(e) => setField(k, e.target.value)}
                 className={fieldClass(HEADER_LABELS[k])}
               />
@@ -257,13 +260,13 @@ export function AlertReview({ id }: { id: string }) {
         <h2 className="text-lg font-bold">Content</h2>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">What happened?</span>
-          <textarea dir="auto" rows={4} value={fields.what_happened} placeholder="Not in the file"
+          <textarea dir="auto" rows={4} value={fields.what_happened} placeholder={alert.fileType === "text" ? "Not stated" : "Not in the file"}
             onChange={(e) => setField("what_happened", e.target.value)} className={fieldClass("What happened")} />
           {issueText("What happened")}
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Key message (under the main picture)</span>
-          <input dir="auto" value={fields.key_message} placeholder="Not in the file"
+          <input dir="auto" value={fields.key_message} placeholder={alert.fileType === "text" ? "Not stated" : "Not in the file"}
             onChange={(e) => setField("key_message", e.target.value)} className={fieldClass("Key message")} />
           {issueText("Key message")}
         </label>
@@ -288,7 +291,9 @@ export function AlertReview({ id }: { id: string }) {
           Incident photos and diagrams are shown during “What happened”, in this order. Pictures marked ⚠️ may show a
           logo, company name, vehicle plate or ID: blur them, stop using them, or confirm they are safe.
         </p>
-        {pictures.length === 0 && <p className="text-sm text-muted">No pictures were found in the file.</p>}
+        {pictures.length === 0 && (
+          <p className="text-sm text-muted">{alert.fileType === "text" ? "A typed description has no pictures." : "No pictures were found in the file."}</p>
+        )}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {pictures.map((p, i) => {
             const problem = issuesAt(`Picture ${i + 1}`).length > 0;
@@ -357,7 +362,7 @@ export function AlertReview({ id }: { id: string }) {
       {/* ---------- Video options ---------- */}
       <section className="flex flex-wrap items-end gap-6 rounded-xl border border-slate-200 bg-surface p-4">
         <Choice label="Video language" value={outputLanguage} onChange={setOutputLanguage} options={[
-          { value: "auto", label: alert.documentLanguage === "ar" ? "العربية" : "English", hint: "Same as the file" },
+          { value: "auto", label: alert.documentLanguage === "ar" ? "العربية" : "English", hint: alert.fileType === "text" ? "Same as the description" : "Same as the file" },
           { value: alert.documentLanguage === "ar" ? "en" : "ar", label: alert.documentLanguage === "ar" ? "English" : "العربية", hint: "Translated" },
           { value: "both", label: "Both", hint: "Two videos" },
         ]} />

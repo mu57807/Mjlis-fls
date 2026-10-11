@@ -78,9 +78,14 @@ npm run render:sample -- ar 9:16        # Arabic, vertical
 On **New LFI**, choose **Upload alert file (PDF / PPTX)**. You can drag the file in or click to choose it (up to 20 MB). Typing
 the description is still available on the other tab.
 
-1. **Reading the file (30–90 s).** Claude reads the alert:
-   - **PDF:** the file itself is sent.
-   - **PPTX:** the slide text and pictures are sent.
+1. **Local clean-up (on the server, no internet).** The text is taken out of the file and these are removed
+   **before anything is sent to Claude**: every name on the **Names list**, and anything that looks like an ID /
+   reference number, email, phone number, GPS position, company name ("… LLC"), titled person's name ("Mr. …",
+   "المهندس …") or a specific rig / well / site ("Rig 23", "… Field"). Removed text shows as "[reference removed]".
+2. **Reading the file (30–90 s).** Claude reads the alert:
+   - **PDF:** the cleaned text and the pictures are sent. Only a **scanned** PDF (no text inside, just page
+     images) is sent as the file itself, because there is no text to clean; the review screen says so.
+   - **PPTX:** the cleaned slide text and the pictures are sent.
 
    Claude fills in the template fields:
    - Header: date, time, incident title, risk category, injury / asset damaged, actual and potential severity,
@@ -90,17 +95,28 @@ the description is still available on the other tab.
 
    Pictures are taken out of the file (PPTX: `ppt/media`; PDF: the embedded images, or a picture of the page if
    none can be extracted). Each one is classified as photo, diagram, logo, and so on.
-2. **Review screen.** Every field and picture can be edited:
+3. **Review screen.** Every field and picture can be edited:
    - fix any text; an empty field means it was not in the file (nothing is invented)
    - per picture: **Use in the video** (on/off), reorder, delete, **Blur…**, or confirm **I checked it**
    - **Blur…**: drag boxes over logos, company names, number plates or IDs, then save. The boxed areas are
      pixelated and blurred. **Undo blur** goes back.
-3. **Create storyboard.** Choose the language (the file's own, translated, or both), the format and the length. The
+4. **Create storyboard.** Choose the language (the file's own, translated, or both), the format and the length. The
    storyboard always follows this order:
    title card (incident title, date, location, risk category, potential severity) → what happened (with the
    incident photos) → why it happened → key message → how to sustain the learning → reflective questions →
    closing card.
-4. Review, approve and render as usual.
+5. Review, approve and render as usual.
+
+**Typed descriptions** (the other tab) go the same way: local clean-up → Claude reads out the facts → the same
+review screen → storyboard. (In demo mode the typed samples still go straight to a storyboard.)
+
+### The Names list
+
+Open **Names list** at the top of the page and add the names that come up often: your own company, regular
+contractors and suppliers, field, plant, rig and camp names, and people if needed. For each one choose what it is
+replaced with (for example "the contractor", "the site"). Arabic names are matched with or without "ال" and
+with common spelling variants (ا/أ/إ, ي/ى, ه/ة). The list is also used by the final check of **every** video,
+including older ones. Names that are not on the list are still removed by Claude and caught by the final check.
 
 Try it with the fictional samples in `samples/alerts/` (`sample-lfi-alert.pdf` and `.pptx`). They contain fake
 company names, an "Ifadah#" number, a permit number, a logo and a vehicle plate, so you can see the rules at work.
@@ -109,19 +125,22 @@ company names, an "Ifadah#" number, a permit number, a logo and a vehicle plate,
 
 - **No company names**: no operator, contractor, subcontractor, client or brand names. Neutral roles are used
   instead ("the contractor", "the operator", "the crew", "Vehicle A / Vehicle B").
+- **No names of people** and **no exact locations** (site, field, well, rig, plant, camp or city names and
+  numbers, GPS positions). The type of place is used instead ("a drilling rig", "the laydown yard").
 - **No incident IDs or reference numbers** of any kind (Ifadah#, report numbers, case IDs, permit numbers…). They
   are not extracted, shown or spoken. The uploaded file is **not stored**. Names and IDs found in it are kept only
   as one-way codes (hashes), which are used to recognise them if they appear again.
 - **No invented facts.** A missing field stays empty and is listed under "Missing information".
 - **Final check before every render** (uploads, typed descriptions, WhatsApp and the API):
-  1. names / IDs from the original file;
-  2. anything that looks like a reference number or company name;
+  1. names / IDs from the original file, and everything on the Names list;
+  2. anything that looks like a reference number, company name, person's name or exact location;
   3. pictures flagged as possibly showing a logo, name, plate or ID that nobody has checked or blurred;
   4. Claude reads all the video's text once more.
 
   If anything is found, **the render is blocked**: the problems are listed at the top of the review screen and the
-  scene is marked in red. Edit the text, then save and approve again. A false alarm can be dismissed with **Not a
-  company name or ID**, except for names and IDs that really appear in the original file, which must be edited out.
+  scene is marked in red. Edit the text, then save and approve again. A false alarm can be dismissed (for example
+  **Not a company name or ID**, **Not an exact location**), except for names and IDs that really appear in the
+  original file or on the Names list, which must be edited out.
 - History never shows an uploaded alert's title while it still contains a name or ID from the file.
 
 ## Using it from WhatsApp

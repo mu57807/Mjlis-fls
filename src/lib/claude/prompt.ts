@@ -26,7 +26,8 @@ Remove everything that could identify a person, company or place:
 - Never mention incident IDs or reference numbers of any kind (incident system numbers such as Ifadah#, report numbers, case IDs, permit numbers, work orders, badge or employee numbers, equipment tags, vehicle plates, phone numbers) -> remove them completely; do not hint at them.
 - Exact dates and clock times -> remove, or generalise if relevant ("during the morning shift").
 - Keep technical facts that matter for learning: weights, heights, distances, pressures, equipment types, job steps.
-- sensitive_terms: list every company/brand/organisation name, person name and ID or reference number that appears in the DESCRIPTION, exactly as written there. This list is only used by the app to check automatically that none of them reached the video; it is never shown. Do not include generic words such as "contractor".
+- Text in [square brackets] such as "[reference removed]" was already removed by the app before you saw it: do not guess what it was, and leave it out.
+- sensitive_terms: list every company/brand/organisation name, person name, specific place name and ID or reference number that appears in the DESCRIPTION, exactly as written there. This list is only used by the app to check automatically that none of them reached the video; it is never shown. Do not include generic words such as "contractor".
 - anonymisation_notes: short generic notes on what kinds of details you removed ("Removed 2 personal names", "Removed a permit number"). Never repeat the removed details themselves. Write them in the output language. Empty list if nothing was removed.
 
 ## Rule 3 - Tone

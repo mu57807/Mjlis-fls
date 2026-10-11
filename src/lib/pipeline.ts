@@ -12,8 +12,12 @@ import {
   getAlert,
   getAlertBannedHashes,
   getProject,
+  listKnownNames,
   updateAlert,
 } from "./db";
+import { redactLocally } from "./redact";
+import { hashTerms } from "./compliance";
+import { isDemoMode } from "./claude/client";
 import { structureIncident } from "./claude/structure";
 import { buildAlertStoryboard } from "./claude/alert-storyboard";
 import { checkAlert } from "./alerts/check";
@@ -24,7 +28,7 @@ import { startRenderWorker } from "./render/start";
 /** Thrown when the APP RULES check finds a company name, an ID or an unchecked picture. */
 export class ComplianceBlockedError extends Error {
   constructor(public issues: ComplianceIssue[]) {
-    super(`Blocked: ${issues.length} problem(s) must be fixed first (company names, IDs or unchecked pictures).`);
+    super(`Blocked: ${issues.length} problem(s) must be fixed first (company, person or place names, IDs or unchecked pictures).`);
   }
 }
 
@@ -54,9 +58,15 @@ export async function createFromIncident(input: {
       : input.outputLanguage === "auto"
         ? [detectLanguage(input.description)]
         : [input.outputLanguage];
+  // The local clean-up runs before the text is sent to Claude, and only the
+  // cleaned text is kept. (Demo mode only accepts the built-in samples.)
+  const clean = isDemoMode()
+    ? { text: input.description, removed: [] as string[] }
+    : redactLocally(input.description, listKnownNames());
+  const removedHashes = hashTerms(clean.removed);
   const results = await Promise.all(
     languages.map((language) =>
-      structureIncident({ description: input.description, language, targetSeconds: input.targetSeconds }),
+      structureIncident({ description: clean.text, language, targetSeconds: input.targetSeconds }),
     ),
   );
   const batchId = randomUUID();
@@ -65,13 +75,13 @@ export async function createFromIncident(input: {
       batchId,
       aspectRatio: input.aspectRatio,
       targetSeconds: input.targetSeconds,
-      sourceText: input.description,
+      sourceText: clean.text,
       storyboard,
       demo,
       origin: input.origin,
       originContact: input.originContact,
       callbackUrl: input.callbackUrl,
-      bannedHashes,
+      bannedHashes: [...bannedHashes, ...removedHashes],
     }),
   );
 }

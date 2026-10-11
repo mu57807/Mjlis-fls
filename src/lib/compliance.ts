@@ -1,6 +1,6 @@
-// The APP RULES check: no company names and no incident IDs / reference
-// numbers anywhere in what a video shows or says, and no unchecked pictures
-// that may show a logo, name, plate or ID.
+// The APP RULES check: no company names, incident IDs / reference numbers,
+// names of people or exact locations anywhere in what a video shows or says,
+// and no unchecked pictures that may show a logo, name, plate or ID.
 //
 // Three layers:
 //  1. "known"   - names/IDs found in the source, kept only as keyed hashes
@@ -12,7 +12,7 @@
 import { hmac } from "./secret";
 import type { Facts, Storyboard } from "./schema";
 
-export type IssueKind = "company" | "id" | "image";
+export type IssueKind = "company" | "id" | "person" | "location" | "image";
 export type IssueSource = "known" | "pattern" | "ai" | "image";
 
 export interface ComplianceIssue {
@@ -151,6 +151,8 @@ function knownMatches(text: string, hashes: Set<string>): { text: string; partia
 // Patterns
 // ---------------------------------------------------------------------------
 
+const PHONE_REASON = "Phone or ID number";
+
 const ID_PATTERNS: { re: RegExp; reason: string }[] = [
   { re: /\bifad[ah]{1,2}\s*#?\s*[:\-]?\s*\d*/gi, reason: "Incident system reference (Ifadah)" },
   { re: /#\s*\d{2,}/g, reason: "Number after # (looks like a reference)" },
@@ -165,8 +167,8 @@ const ID_PATTERNS: { re: RegExp; reason: string }[] = [
     re: /(?:رقم|مرجع)\s*(?:البلاغ|الحادثه|الحادثة|التقرير|التصريح|الموظف|الشاره|الشارة)?\s*[:#]?\s*[0-9\u0660-\u0669][0-9\u0660-\u0669/-]{2,}/g,
     reason: "Looks like a reference or ID number",
   },
-  { re: /[\w.+-]+@[\w-]+\.[\w.-]+/g, reason: "Email address" },
-  { re: /\+?\d[\d\s-]{8,}\d/g, reason: "Phone or ID number" },
+  { re: /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, reason: "Email address" },
+  { re: /\+?\d[\d\s-]{8,}\d/g, reason: PHONE_REASON },
 ];
 
 const COMPANY_PATTERNS: { re: RegExp; reason: string }[] = [
@@ -180,27 +182,83 @@ const COMPANY_PATTERNS: { re: RegExp; reason: string }[] = [
   },
 ];
 
+const LOCATION_PATTERNS: { re: RegExp; reason: string }[] = [
+  {
+    re: /-?\d{1,3}\.\d{3,}\s*°?\s*[NSEW]?\s*,\s*-?\d{1,3}\.\d{3,}\s*°?\s*[NSEW]?/g,
+    reason: "GPS coordinates (exact location)",
+  },
+  { re: /\d{1,3}\s*°\s*\d{1,2}\s*['′]\s*(?:\d{1,2}(?:\.\d+)?\s*["″])?\s*[NSEW]/g, reason: "GPS coordinates (exact location)" },
+  {
+    re: /\b(?:rig|well|wellpad|pad|platform|plant|gosp|camp|block|field|jetty|berth)\s*(?:no\.?|number|#)?\s*[:\-]?\s*[A-Z]{0,4}-?\d+[A-Z0-9-]*\b/gi,
+    reason: "Looks like a specific rig, well, site or plant",
+  },
+  {
+    re: /\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?\s+(?:Oilfield|Field|Refinery|Terminal|Gas\s+Plant|Port|Camp)\b/g,
+    reason: "Looks like the name of a field, plant or site",
+  },
+  {
+    re: /(?:الحفار|حفار|البئر|بئر|المنصه|المنصة|منصة|المحطه|المحطة|محطة|الحقل|حقل|المعسكر|معسكر|المصنع|مصنع)\s*(?:رقم)?\s*[:#\-]?\s*[A-Za-z\-]*[0-9\u0660-\u0669][A-Za-z0-9\u0660-\u0669\-]*/g,
+    reason: "Looks like a specific rig, well, site or plant",
+  },
+];
+
+const PERSON_PATTERNS: { re: RegExp; reason: string }[] = [
+  { re: /\b(?:Mr|Mrs|Ms|Miss|Dr|Eng|Engr)\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?/g, reason: "Looks like a person's name" },
+  {
+    re: /(?:السيد|السيده|السيدة|المهندس|المهندسه|المهندسة|الدكتور|الأستاذ|الاستاذ)\s+(?!ال)[\u0621-\u064A]{2,}(?:\s+[\u0621-\u064A]{2,})?/g,
+    reason: "Looks like a person's name",
+  },
+];
+
 // Capitalised words that are generic, so "The Company" is not a name.
 const GENERIC_LEADING = /^(?:the|this|that|a|an|our|your|each|every|any|main|same)\s+/i;
 
-function patternMatches(text: string): { text: string; kind: IssueKind; reason: string }[] {
-  const out: { text: string; kind: IssueKind; reason: string }[] = [];
-  for (const { re, reason } of ID_PATTERNS) {
-    for (const m of text.matchAll(re)) {
-      const t = m[0].trim();
-      if (t.length >= 3) out.push({ text: t, kind: "id", reason });
+export interface PatternSpan {
+  start: number;
+  end: number;
+  text: string;
+  kind: Exclude<IssueKind, "image">;
+  reason: string;
+}
+
+/** Everything in a text that looks like an ID, a company name, a person's name or an exact location. */
+export function patternSpans(text: string): PatternSpan[] {
+  const out: PatternSpan[] = [];
+  const add = (start: number, raw: string, kind: PatternSpan["kind"], reason: string, minWords = 1) => {
+    let t = raw;
+    const lead = t.length - t.trimStart().length;
+    t = t.trim();
+    let s = start + lead;
+    while (GENERIC_LEADING.test(t)) {
+      const cut = t.match(GENERIC_LEADING)![0].length;
+      t = t.slice(cut);
+      s += cut;
     }
-  }
+    // Dates such as 12-03-2026 are facts, not phone numbers.
+    if (reason === PHONE_REASON && t.replace(/\D/g, "").length < 9) return;
+    if (t.length >= 3 && t.split(/\s+/).length >= minWords) out.push({ start: s, end: s + t.length, text: t, kind, reason });
+  };
+  for (const { re, reason } of ID_PATTERNS) for (const m of text.matchAll(re)) add(m.index, m[0], "id", reason);
+  for (const { re, reason } of LOCATION_PATTERNS) for (const m of text.matchAll(re)) add(m.index, m[0], "location", reason);
   // One sentence at a time, so "Vehicle B. The Company" is not read as one name.
-  const sentences = text.split(/(?<=[.!?؟])\s+(?=\p{Lu}|\p{Script=Arabic})/u);
-  for (const { re, reason } of COMPANY_PATTERNS) {
-    for (const m of sentences.flatMap((sentence) => [...sentence.matchAll(re)])) {
-      let t = m[0].trim();
-      while (GENERIC_LEADING.test(t)) t = t.replace(GENERIC_LEADING, "");
-      if (t.split(/\s+/).length >= 2) out.push({ text: t, kind: "company", reason });
-    }
+  const sentences: { at: number; text: string }[] = [];
+  let at = 0;
+  for (const m of text.matchAll(/(?<=[.!?؟])(?<!\b(?:Mr|Mrs|Ms|Dr|Eng|Engr|No|St)\.)\s+(?=\p{Lu}|\p{Script=Arabic})/gu)) {
+    sentences.push({ at, text: text.slice(at, m.index) });
+    at = m.index + m[0].length;
+  }
+  sentences.push({ at, text: text.slice(at) });
+  for (const sentence of sentences) {
+    for (const { re, reason } of COMPANY_PATTERNS)
+      for (const m of sentence.text.matchAll(re)) add(sentence.at + m.index, m[0], "company", reason, 2);
+    for (const { re, reason } of PERSON_PATTERNS)
+      for (const m of sentence.text.matchAll(re)) add(sentence.at + m.index, m[0], "person", reason, 2);
   }
   return out;
+}
+
+function patternMatches(text: string): { text: string; kind: IssueKind; reason: string }[] {
+  return patternSpans(text);
 }
 
 /**
@@ -209,7 +267,7 @@ function patternMatches(text: string): { text: string; kind: IssueKind; reason: 
  */
 export function scanSourceForSensitiveTerms(text: string): string[] {
   return patternMatches(text).flatMap((m) =>
-    m.kind === "company"
+    m.kind !== "id"
       ? [m.text]
       : // Keep only the code itself ("WP-2209" from "Permit WP-2209"), not the label words.
         (m.text.match(/[\p{L}\p{N}]*\d[\p{L}\p{N}/-]*/gu) ?? []).filter((c) => c.replace(/\D/g, "").length >= 3),
@@ -277,10 +335,10 @@ export function checkTexts(texts: CheckedText[], bannedHashes: string[]): Compli
         where: f.where,
         text: t,
         reason: partial
-          ? "This word is part of a company or person name in the original file"
+          ? "This word is part of a company, person or place name from the original file or the names list"
           : /\d/.test(t)
             ? "This number appears in the original file as an ID or reference"
-            : "This name appears in the original file as a company or person name",
+            : "This is a company, person or place name from the original file or the names list",
         sceneId: f.sceneId,
         overridable: partial,
       });

@@ -61,7 +61,7 @@ export function HistoryList() {
       )}
       {alerts.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-lg font-bold">Uploaded alerts</h2>
+          <h2 className="text-lg font-bold">Alerts and typed incidents (facts review)</h2>
           <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-surface">
             {alerts.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -70,7 +70,8 @@ export function HistoryList() {
                     {a.title || "Untitled alert"}
                   </Link>
                   <div className="mt-0.5 text-xs text-muted">
-                    {new Date(a.createdAt).toLocaleString()} · {a.fileType.toUpperCase()} · {a.pictures} picture(s)
+                    {new Date(a.createdAt).toLocaleString()} ·{" "}
+                    {a.fileType === "text" ? "Typed description" : `${a.fileType.toUpperCase()} · ${a.pictures} picture(s)`}
                   </div>
                 </div>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${a.projectIds.length ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-900"}`}>

@@ -57,6 +57,18 @@ function TextIncidentForm({ demoMode }: { demoMode: boolean }) {
     setBusy(true);
     setError(null);
     try {
+      if (!demoMode) {
+        // Cleaned locally, then Claude reads out the facts for you to review.
+        const res = await fetch("/api/alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Something went wrong.");
+        router.push(`/alerts/${data.alertId}`);
+        return;
+      }
       const res = await fetch("/api/storyboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,8 +86,9 @@ function TextIncidentForm({ demoMode }: { demoMode: boolean }) {
   return (
     <form onSubmit={submit} className="space-y-6">
       <p className="text-muted">
-        Paste the incident description below (Arabic or English). Claude will turn it into a storyboard
-        that you review and approve before any video is made.
+        {demoMode
+          ? "Paste the incident description below (Arabic or English). Claude will turn it into a storyboard that you review and approve before any video is made."
+          : "Paste the incident description below (Arabic or English). Names on your names list, ID numbers and similar details are removed on this server first; then Claude reads out the facts, and you review them before a storyboard is made."}
       </p>
 
       {demoMode && (
@@ -113,11 +126,12 @@ function TextIncidentForm({ demoMode }: { demoMode: boolean }) {
           className="w-full rounded-xl border border-slate-300 bg-surface p-3 shadow-sm focus:border-brand focus:outline-none"
         />
         <p className="mt-1 text-xs text-muted">
-          Names of people and companies, locations and ID numbers will be removed automatically. You
+          Names of people and companies, exact locations and ID numbers are removed automatically. You
           will still be asked to check before approving. {description.length.toLocaleString()} characters.
         </p>
       </div>
 
+      {demoMode && (
       <div className="grid gap-5 sm:grid-cols-3">
         <Choice
           label="Output language"
@@ -148,9 +162,10 @@ function TextIncidentForm({ demoMode }: { demoMode: boolean }) {
           ]}
         />
       </div>
+      )}
 
       {error && (
-        <Panel tone="danger" title="Could not create the storyboard">
+        <Panel tone="danger" title={demoMode ? "Could not create the storyboard" : "Could not read the incident"}>
           {error}
         </Panel>
       )}
@@ -161,12 +176,12 @@ function TextIncidentForm({ demoMode }: { demoMode: boolean }) {
           disabled={busy || description.trim().length < 40}
           className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white shadow hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? "Creating storyboard…" : "Create storyboard"}
+          {busy ? (demoMode ? "Creating storyboard…" : "Reading…") : demoMode ? "Create storyboard" : "Read the incident"}
         </button>
         {busy && (
           <span className="text-sm text-muted">
             Claude is reading the incident. This usually takes 20–60 seconds
-            {outputLanguage === "both" ? " (two languages are written in parallel)" : ""}.
+            {demoMode && outputLanguage === "both" ? " (two languages are written in parallel)" : ""}.
           </span>
         )}
       </div>

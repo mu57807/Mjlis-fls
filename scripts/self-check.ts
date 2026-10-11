@@ -7,6 +7,7 @@ import { checkStoryboard, fitDurations, totalDuration } from "../src/lib/storybo
 import { buildCues, buildSrt, buildTimeline, estimateWordTimings, FPS } from "../src/lib/video";
 import { wordsFromAlignment } from "../src/lib/tts/elevenlabs";
 import { checkStoryboardCompliance, checkTexts, hashTerms, scanSourceForSensitiveTerms } from "../src/lib/compliance";
+import { redactLocally } from "../src/lib/redact";
 
 let failures = 0;
 function expect(cond: boolean, msg: string) {
@@ -142,6 +143,44 @@ for (const needle of ["النجم", "الريان"]) {
   expect(imgIssues.length === 1 && imgIssues[0].text === "truck", "unchecked flagged picture blocks the render");
   const okPics = { ...withPics, media: withPics.media.map((m) => ({ ...m, checked: true })) };
   expect(checkStoryboardCompliance(okPics, []).filter((i) => i.kind === "image").length === 0, "checked picture passes");
+
+  // People's names and exact locations (patterns).
+  const kinds = (text: string) => checkTexts([{ where: "t", text }], []).map((i) => `${i.kind}:${i.text}`);
+  expect(kinds("Mr. John Smith gave the briefing.").includes("person:Mr. John Smith"), "a titled person's name is flagged");
+  expect(kinds("The crane was at Rig 23.").includes("location:Rig 23"), "a rig number is flagged as a location");
+  expect(kinds("Position 24.7136, 46.6753 was logged.").some((k) => k.startsWith("location:")), "GPS coordinates are flagged");
+  expect(kinds("The crew at Burgan Field stopped work.").includes("location:Burgan Field"), "a named field is flagged");
+  expect(kinds("قال المهندس خالد العتيبي إن العمل توقف").some((k) => k.startsWith("person:")), "an Arabic titled name is flagged");
+  expect(kinds("وقع الحادث في الحفار رقم 23").some((k) => k.startsWith("location:")), "an Arabic rig number is flagged");
+  for (const t of [
+    "A drilling rig crew worked in the laydown yard.",
+    "The field team held a toolbox talk on 12-03-2026.",
+    "The engineer stopped the job. The supervisor agreed.",
+    "قال المهندس المسؤول إن العمل توقف",
+  ]) {
+    expect(kinds(t).length === 0, `no false alarm: "${t.slice(0, 40)}…"`);
+  }
+}
+
+{
+  // The local clean-up, before anything is sent to Claude.
+  const names = [
+    { id: "1", term: "Falcon Logistics", kind: "company" as const, replacement: "the contractor" },
+    { id: "2", term: "النجم الذهبي", kind: "company" as const, replacement: "المقاول" },
+    { id: "3", term: "Rami Haddad", kind: "person" as const, replacement: "the driver" },
+  ];
+  const src =
+    "Ifadah# 45821. On 12-03-2026 a Falcon-Logistics truck driven by Rami Haddad at Rig 23 hit Vehicle B. " +
+    "Permit WP-2209 was valid. Call +966 55 123 4567. The 12500 kg load fell 3 m. وقع في موقع شركة النجم الذهبي.";
+  const r = redactLocally(src, names);
+  for (const gone of ["45821", "Falcon", "Rami", "Rig 23", "WP-2209", "123 4567", "النجم"]) {
+    expect(!r.text.includes(gone), `clean-up removes "${gone}"`);
+  }
+  for (const kept of ["12-03-2026", "12500 kg", "3 m", "Vehicle B", "the contractor", "the driver", "المقاول"]) {
+    expect(r.text.includes(kept), `clean-up keeps "${kept}"`);
+  }
+  expect(r.removed.includes("Rami Haddad") && r.notes.length > 0, "clean-up reports what it removed (for hashing)");
+  expect(redactLocally("A dropped object fell from height.", []).text === "A dropped object fell from height.", "clean text is unchanged");
 }
 
 console.log(failures ? `\n${failures} check(s) failed.` : "\nAll checks passed.");

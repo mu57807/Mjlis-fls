@@ -89,7 +89,8 @@ export interface Alert {
   id: string;
   createdAt: string;
   updatedAt: string;
-  fileType: "pdf" | "pptx";
+  /** "text" = typed on the New LFI page. */
+  fileType: "pdf" | "pptx" | "text";
   documentLanguage: "en" | "ar";
   fields: AlertFields;
   pictures: AlertPicture[];
